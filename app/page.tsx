@@ -1,65 +1,127 @@
-import Image from "next/image";
+'use client'
 
-export default function Home() {
+import { useEffect, useState } from 'react'
+import { formatEuro } from '@/lib/constants'
+
+type Stats = {
+  winstDitJaar: number
+  winstDezeMaand: number
+  aantalDezeMaand: number
+  aantalDitJaar: number
+  voorraad: { product: string; in_huis: number; onderweg: number }[]
+}
+
+export default function Dashboard() {
+  const [stats, setStats] = useState<Stats | null>(null)
+  const [laden, setLaden] = useState(true)
+  const [fout, setFout] = useState('')
+
+  useEffect(() => {
+    fetch('/api/stats')
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.error) setFout(data.error)
+        else setStats(data)
+      })
+      .catch(() => setFout('Kon stats niet laden'))
+      .finally(() => setLaden(false))
+  }, [])
+
+  const huidigJaar = new Date().getFullYear()
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex min-h-screen w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
+    <div className="px-4 pt-6 pb-4">
+      <h1 className="text-2xl font-bold text-white mb-1">Vinted Dashboard</h1>
+      <p className="text-gray-400 text-sm mb-6">{huidigJaar} — 17 tristanjansse</p>
+
+      {laden && (
+        <div className="text-center text-gray-400 py-16 text-lg">Laden...</div>
+      )}
+
+      {fout && (
+        <div className="bg-red-900/40 border border-red-700 rounded-xl p-4 text-red-300 mb-4">
+          {fout}
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
+      )}
+
+      {stats && (
+        <>
+          <div className="grid grid-cols-2 gap-3 mb-6">
+            <StatCard
+              label="Winst dit jaar"
+              waarde={formatEuro(stats.winstDitJaar)}
+              positief={stats.winstDitJaar >= 0}
+              groot
             />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
+            <StatCard
+              label="Winst deze maand"
+              waarde={formatEuro(stats.winstDezeMaand)}
+              positief={stats.winstDezeMaand >= 0}
+              groot
+            />
+            <StatCard
+              label="Verkopen deze maand"
+              waarde={String(stats.aantalDezeMaand)}
+            />
+            <StatCard
+              label="Verkopen dit jaar"
+              waarde={String(stats.aantalDitJaar)}
+            />
+          </div>
+
+          <div className="bg-gray-800 rounded-xl p-4">
+            <h2 className="text-lg font-semibold text-white mb-3">Voorraad in huis</h2>
+            <div className="space-y-2">
+              {stats.voorraad
+                .filter((v) => v.in_huis > 0 || v.onderweg > 0)
+                .map((item) => (
+                  <div key={item.product} className="flex items-center justify-between py-1">
+                    <span className="text-gray-300 text-sm">{item.product}</span>
+                    <div className="flex gap-3 items-center">
+                      {item.onderweg > 0 && (
+                        <span className="text-xs text-yellow-400 bg-yellow-900/30 px-2 py-0.5 rounded-full">
+                          {item.onderweg} onderweg
+                        </span>
+                      )}
+                      <span className={`text-sm font-semibold ${item.in_huis > 0 ? 'text-emerald-400' : 'text-gray-500'}`}>
+                        {item.in_huis} stuks
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              {stats.voorraad.every((v) => v.in_huis === 0 && v.onderweg === 0) && (
+                <p className="text-gray-500 text-sm text-center py-2">Geen voorraad gevonden</p>
+              )}
+            </div>
+          </div>
+        </>
+      )}
     </div>
-  );
+  )
+}
+
+function StatCard({
+  label,
+  waarde,
+  positief,
+  groot,
+}: {
+  label: string
+  waarde: string
+  positief?: boolean
+  groot?: boolean
+}) {
+  const kleur =
+    positief === undefined
+      ? 'text-white'
+      : positief
+      ? 'text-emerald-400'
+      : 'text-red-400'
+
+  return (
+    <div className="bg-gray-800 rounded-xl p-4">
+      <p className="text-gray-400 text-xs mb-1">{label}</p>
+      <p className={`font-bold ${groot ? 'text-xl' : 'text-lg'} ${kleur}`}>{waarde}</p>
+    </div>
+  )
 }
