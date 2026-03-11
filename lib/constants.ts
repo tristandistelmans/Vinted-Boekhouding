@@ -11,6 +11,11 @@ export const PRODUCTEN = [
   'UNI White',
   'UNI Green',
   'UNI Blue',
+  'Acne Hoodie',
+  'ALD Tee',
+  'ALD Tote Bag',
+  'Golden Goose',
+  'Maison Margiela',
 ] as const
 
 export const STATUSSEN = [
@@ -23,7 +28,7 @@ export const STATUSSEN = [
   'Probleem',
 ] as const
 
-export const ACCOUNTS = ['17 - tristanjansse'] as const
+export const ACCOUNTS = ['1-jesuslata', '2-disteltr'] as const
 
 export const ACTIEVE_STATUSSEN = [
   'Afgerond (geld binnen)',

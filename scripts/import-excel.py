@@ -36,6 +36,33 @@ HEADERS = {
     "Prefer": "return=minimal",
 }
 
+# Mapping van oude accountnamen naar de 2 nieuwe accounts
+# Pas dit aan als een naam verkeerd is gemapt
+ACCOUNT_MAPPING = {
+    "jesuslata - laptop": "1-jesuslata",
+    "jesuslata": "1-jesuslata",
+    "disteltr - moto": "2-disteltr",
+    "disteltr": "2-disteltr",
+    "moto g54": "2-disteltr",
+    "17 - tristanjansse": "1-jesuslata",
+    "tristanjansse": "1-jesuslata",
+    "-": "1-jesuslata",
+}
+
+def normaliseer_account(account: str) -> str:
+    """Normaliseer accountnaam (case-insensitief) naar de correcte waarde."""
+    if not account:
+        return "1-jesuslata"
+    mapped = ACCOUNT_MAPPING.get(account.strip().lower())
+    if mapped:
+        return mapped
+    # Als de naam al een van de twee geldige accounts is, gebruik die
+    if account.strip() in ("1-jesuslata", "2-disteltr"):
+        return account.strip()
+    # Onbekende naam: bewaar origineel zodat je het later kan controleren
+    print(f"  ⚠ Onbekend account '{account}', bewaard als origineel")
+    return account.strip()
+
 GELDIGE_STATUSSEN = [
     "Afgerond (geld binnen)",
     "Verkocht - Nog niet verzonden",
@@ -45,6 +72,21 @@ GELDIGE_STATUSSEN = [
     "Verlies",
     "Probleem",
 ]
+
+# Normaliseer schrijffouten uit het Excel bestand
+STATUS_MAPPING = {
+    "verkocht - nog niet verzonden": "Verkocht - Nog niet verzonden",
+    "afgerond (geld binnen)": "Afgerond (geld binnen)",
+    "onderweg": "Onderweg",
+    "retour": "Retour",
+    "retour ontvangen": "Retour ontvangen",
+    "verlies": "Verlies",
+    "probleem": "Probleem",
+}
+
+def normaliseer_status(status: str) -> str:
+    """Normaliseer status (case-insensitief) naar de correcte waarde."""
+    return STATUS_MAPPING.get(status.strip().lower(), status.strip())
 
 def datum_str(waarde):
     """Zet Excel datum om naar YYYY-MM-DD string."""
@@ -98,8 +140,10 @@ def import_verkopen(ws):
         if not verkoopdatum or not product or not naam_koper:
             continue
 
-        # Valideer status
-        if status not in GELDIGE_STATUSSEN:
+        # Normaliseer en valideer status
+        if status:
+            status = normaliseer_status(str(status))
+        if not status or status not in GELDIGE_STATUSSEN:
             print(f"  ⚠ Rij {row_idx}: onbekende status '{status}', overgeslagen")
             continue
 
@@ -115,7 +159,7 @@ def import_verkopen(ws):
             "naam_koper": str(naam_koper).strip(),
             "verkoopprijs": verkoopprijs,
             "status": str(status).strip(),
-            "account": str(account).strip() if account else "17 - tristanjansse",
+            "account": normaliseer_account(str(account)) if account else "1-jesuslata",
         })
 
     print(f"  Gevonden: {len(rijen)} verkopen")

@@ -40,22 +40,49 @@ export async function GET() {
     arr.reduce((sum, v) => sum + (v.winst ?? 0), 0)
 
   // Voorraad per product
+  // Als er een 'Beginsaldo' inkoop bestaat voor een product, wordt die gebruikt als
+  // startpunt. Alleen inkopen en verkopen NA de beginsaldo-datum tellen mee.
+  // Dit zorgt dat de historische data-onnauwkeurigheden de huidige voorraad niet beïnvloeden.
   const inkopenArr = inkopen || []
   const voorraad = PRODUCTEN.map((product) => {
+    const beginsaldoEntries = inkopenArr
+      .filter((i) => i.product === product && i.status === 'Beginsaldo')
+      .sort((a: { besteldatum: string }, b: { besteldatum: string }) =>
+        b.besteldatum.localeCompare(a.besteldatum)
+      )
+    const beginsaldo = beginsaldoEntries[0] as { aantal: number; besteldatum: string } | undefined
+
+    if (beginsaldo) {
+      const snapDatum = beginsaldo.besteldatum
+      const nieuweInkopen = inkopenArr
+        .filter((i) => i.product === product && i.status === 'In Huis' && i.besteldatum > snapDatum)
+        .reduce((s: number, i: { aantal: number }) => s + i.aantal, 0)
+      const onderweg = inkopenArr
+        .filter((i) => i.product === product && i.status === 'Onderweg' && i.besteldatum > snapDatum)
+        .reduce((s: number, i: { aantal: number }) => s + i.aantal, 0)
+      const nieuweVerkopen = verkopenMetWinst.filter(
+        (v) => v.product === product && v.status !== 'Retour ontvangen' && v.verkoopdatum > snapDatum
+      ).length
+      return {
+        product,
+        in_huis: Math.max(0, beginsaldo.aantal + nieuweInkopen - nieuweVerkopen),
+        onderweg,
+      }
+    }
+
+    // Fallback: oude berekening (als er geen beginsaldo is)
     const ingekocht = inkopenArr
       .filter((i) => i.product === product && i.status === 'In Huis')
       .reduce((s: number, i: { aantal: number }) => s + i.aantal, 0)
     const onderweg = inkopenArr
       .filter((i) => i.product === product && i.status === 'Onderweg')
       .reduce((s: number, i: { aantal: number }) => s + i.aantal, 0)
-    const actief = verkopenMetWinst.filter(
-      (v) =>
-        v.product === product &&
-        (v.status === 'Verkocht - Nog niet verzonden' || v.status === 'Onderweg')
+    const verkocht = verkopenMetWinst.filter(
+      (v) => v.product === product && v.status !== 'Retour ontvangen'
     ).length
     return {
       product,
-      in_huis: Math.max(0, ingekocht - actief),
+      in_huis: Math.max(0, ingekocht - verkocht),
       onderweg,
     }
   })

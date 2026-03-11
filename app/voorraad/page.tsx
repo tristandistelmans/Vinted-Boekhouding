@@ -176,10 +176,10 @@ export default function VoorraadPage() {
           ))}
 
           {/* Recente inkopen */}
-          {inkopen.length > 0 && (
+          {inkopen.filter((i) => i.status !== 'Beginsaldo').length > 0 && (
             <>
               <h2 className="text-white font-semibold mt-5 mb-2">Recente inkopen</h2>
-              {inkopen.slice(0, 10).map((inkoop) => (
+              {inkopen.filter((i) => i.status !== 'Beginsaldo').slice(0, 10).map((inkoop) => (
                 <div key={inkoop.id} className="bg-gray-800 rounded-xl px-4 py-3 flex items-center justify-between">
                   <div>
                     <p className="text-gray-200 text-sm font-medium">
