@@ -34,7 +34,7 @@ export async function POST(request: Request) {
 
   const { data, error } = await supabase
     .from('verkopen')
-    .insert([{ verkoopdatum, product, naam_koper, verkoopprijs: Number(verkoopprijs), status, account }])
+    .insert([{ verkoopdatum, product, naam_koper, verkoopprijs: Number(verkoopprijs), status, account, notitie: notitie || null }])
     .select()
     .single()
 
