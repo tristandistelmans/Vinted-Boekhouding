@@ -278,7 +278,7 @@ export default function VerkopBeheren() {
         </div>
       )}
 
-      {/* Lijst per account */}
+      {/* Lijst per account — naast elkaar */}
       <div className="border-t border-gray-800 mt-1">
         {!laden && gefilterd.length === 0 && (
           <div className="text-center text-gray-500 py-16">
@@ -286,17 +286,18 @@ export default function VerkopBeheren() {
           </div>
         )}
 
-        {accounts.map((account) => (
-          <div key={account}>
+        <div className="flex gap-0 divide-x divide-gray-800">
+          {accounts.map((account) => (
+          <div key={account} className="flex-1 min-w-0">
             {/* Account header */}
-            <div className="px-4 py-2 bg-gray-800/60 border-b border-gray-800">
+            <div className="px-3 py-2 bg-gray-800/60 border-b border-gray-800">
               <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">{account}</p>
             </div>
 
             {rijen(account).map((v) => (
-              <div key={v.id} className="border-b border-gray-800 px-4 py-3">
+              <div key={v.id} className="border-b border-gray-800 px-3 py-2.5">
                 {/* Bovenste rij: foto + info */}
-                <div className="flex items-start gap-3 mb-2">
+                <div className="flex items-start gap-2 mb-2">
                   <ProductAfbeelding product={v.product} />
 
                   <div className="flex-1 min-w-0">
@@ -338,7 +339,7 @@ export default function VerkopBeheren() {
                 </div>
 
                 {/* Status dropdown + delete */}
-                <div className="flex items-center gap-2 pl-14">
+                <div className="flex items-center gap-1.5 pl-[46px]">
                   <select
                     value={v.status}
                     onChange={(e) => updateStatus(v.id, e.target.value)}
@@ -358,7 +359,7 @@ export default function VerkopBeheren() {
                 </div>
 
                 {/* Notitie */}
-                <div className="pl-14 mt-1.5">
+                <div className="pl-[46px] mt-1.5">
                   {notitieEdit?.id === v.id ? (
                     <input
                       type="text"
@@ -382,7 +383,8 @@ export default function VerkopBeheren() {
               </div>
             ))}
           </div>
-        ))}
+          ))}
+        </div>
       </div>
 
       <style>{`
