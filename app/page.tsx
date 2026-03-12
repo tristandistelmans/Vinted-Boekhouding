@@ -14,13 +14,11 @@ type Stats = {
   extraKostenDitJaar: number
   geldBinnen: number
   geldVerwacht: number
-  verliesNetto: number
   omzetDezeMaand: number
   kostenProductDezeMaand: number
   extraKostenDezeMaand: number
   geldBinnenDezeMaand: number
   geldVerwachtDezeMaand: number
-  verliesNettoDezeMaand: number
   teVerzenden: number
   voorraad: { product: string; in_huis: number; onderweg: number }[]
 }
@@ -70,10 +68,10 @@ export default function Dashboard() {
                 <p className="text-yellow-400 text-lg font-bold">{formatEuro(stats.geldVerwachtDezeMaand)}</p>
                 <p className="text-yellow-700 text-xs mt-0.5">Onderweg</p>
               </div>
-              {stats.verliesNettoDezeMaand < 0 && (
+              {stats.extraKostenDezeMaand > 0 && (
                 <div className="flex-1 bg-red-900/20 border border-red-700/30 rounded-xl p-3 text-center">
-                  <p className="text-red-400 text-lg font-bold">{formatEuro(stats.verliesNettoDezeMaand)}</p>
-                  <p className="text-red-700 text-xs mt-0.5">Verlies</p>
+                  <p className="text-red-400 text-lg font-bold">− {formatEuro(stats.extraKostenDezeMaand)}</p>
+                  <p className="text-red-700 text-xs mt-0.5">Kosten</p>
                 </div>
               )}
             </div>
@@ -121,10 +119,10 @@ export default function Dashboard() {
                 <p className="text-yellow-400 text-lg font-bold">{formatEuro(stats.geldVerwacht)}</p>
                 <p className="text-yellow-700 text-xs mt-0.5">Onderweg</p>
               </div>
-              {stats.verliesNetto < 0 && (
+              {stats.extraKostenDitJaar > 0 && (
                 <div className="flex-1 bg-red-900/20 border border-red-700/30 rounded-xl p-3 text-center">
-                  <p className="text-red-400 text-lg font-bold">{formatEuro(stats.verliesNetto)}</p>
-                  <p className="text-red-700 text-xs mt-0.5">Verlies</p>
+                  <p className="text-red-400 text-lg font-bold">− {formatEuro(stats.extraKostenDitJaar)}</p>
+                  <p className="text-red-700 text-xs mt-0.5">Kosten</p>
                 </div>
               )}
             </div>

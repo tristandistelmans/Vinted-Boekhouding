@@ -132,19 +132,15 @@ export async function GET() {
     .filter((e: { datum: string }) => new Date(e.datum).getFullYear() === ditJaar)
     .reduce((s: number, e: { bedrag: number }) => s + e.bedrag, 0)
 
-  // geldBinnen/geldVerwacht tonen werkelijke WINST (niet omzet)
+  // geldBinnen = winst van afgeronde verkopen
   const geldBinnen = verkopenDitJaar
     .filter((v) => v.status === 'Afgerond (geld binnen)')
     .reduce((s, v) => s + (v.winst ?? 0), 0)
 
+  // geldVerwacht = totale OMZET van nog te verzenden / onderweg items
   const geldVerwacht = verkopenDitJaar
     .filter((v) => v.status === 'Verkocht - Nog niet verzonden' || v.status === 'Onderweg')
-    .reduce((s, v) => s + (v.winst ?? 0), 0)
-
-  // Verlies/Retour: negatief effect op winst (verklaring van het verschil)
-  const verliesNetto = verkopenDitJaar
-    .filter((v) => v.status === 'Verlies' || v.status === 'Retour')
-    .reduce((s, v) => s + (v.winst ?? 0), 0)
+    .reduce((s, v) => s + v.verkoopprijs, 0)
 
   // Maand breakdowns
   const actieveVerkopenDezeMaand = verkopenDezeMaand.filter((v) => actieveStatussen.includes(v.status))
@@ -161,13 +157,10 @@ export async function GET() {
     .filter((v) => v.status === 'Afgerond (geld binnen)')
     .reduce((s, v) => s + (v.winst ?? 0), 0)
 
+  // geldVerwachtDezeMaand = totale OMZET van nog te verzenden / onderweg items deze maand
   const geldVerwachtDezeMaand = verkopenDezeMaand
     .filter((v) => v.status === 'Verkocht - Nog niet verzonden' || v.status === 'Onderweg')
-    .reduce((s, v) => s + (v.winst ?? 0), 0)
-
-  const verliesNettoDezeMaand = verkopenDezeMaand
-    .filter((v) => v.status === 'Verlies' || v.status === 'Retour')
-    .reduce((s, v) => s + (v.winst ?? 0), 0)
+    .reduce((s, v) => s + v.verkoopprijs, 0)
 
   const winstPerProductDezeMaand = PRODUCTEN.map((product) => {
     const vk = verkopenDezeMaand.filter((v) => v.product === product)
@@ -199,13 +192,11 @@ export async function GET() {
     extraKostenDitJaar,
     geldBinnen,
     geldVerwacht,
-    verliesNetto,
     omzetDezeMaand,
     kostenProductDezeMaand,
     extraKostenDezeMaand,
     geldBinnenDezeMaand,
     geldVerwachtDezeMaand,
-    verliesNettoDezeMaand,
     winstPerProductDezeMaand,
     winstPerAccountDezeMaand,
     teVerzenden,

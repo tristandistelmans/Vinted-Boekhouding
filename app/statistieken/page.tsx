@@ -24,7 +24,6 @@ type Stats = {
   extraKostenDezeMaand: number
   geldBinnenDezeMaand: number
   geldVerwachtDezeMaand: number
-  verliesNettoDezeMaand: number
   winstPerProductDezeMaand: { product: string; winst: number; aantal: number; gemVerkoopprijs: number }[]
   winstPerAccountDezeMaand: { account: string; winst: number; aantal: number }[]
   winstPerMaand: { naam: string; winst: number }[]
@@ -124,10 +123,10 @@ export default function StatistiekenPage() {
                 <p className="text-yellow-400 text-lg font-bold">{formatEuro(stats.geldVerwachtDezeMaand)}</p>
                 <p className="text-yellow-700 text-xs mt-0.5">Onderweg</p>
               </div>
-              {stats.verliesNettoDezeMaand < 0 && (
+              {stats.extraKostenDezeMaand > 0 && (
                 <div className="flex-1 bg-red-900/20 border border-red-700/30 rounded-xl p-3 text-center">
-                  <p className="text-red-400 text-lg font-bold">{formatEuro(stats.verliesNettoDezeMaand)}</p>
-                  <p className="text-red-700 text-xs mt-0.5">Verlies</p>
+                  <p className="text-red-400 text-lg font-bold">− {formatEuro(stats.extraKostenDezeMaand)}</p>
+                  <p className="text-red-700 text-xs mt-0.5">Kosten</p>
                 </div>
               )}
             </div>
