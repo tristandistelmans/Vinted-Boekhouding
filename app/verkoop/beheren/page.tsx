@@ -191,6 +191,16 @@ export default function VerkopBeheren() {
     return true
   })
 
+  // Groepeer per account, "Nog verzenden" altijd eerst
+  const accounts = [...new Set(gefilterd.map(v => v.account))].sort()
+  function rijen(account: string) {
+    const groep = gefilterd.filter(v => v.account === account)
+    return [
+      ...groep.filter(v => v.status === 'Verkocht - Nog niet verzonden'),
+      ...groep.filter(v => v.status !== 'Verkocht - Nog niet verzonden'),
+    ]
+  }
+
   return (
     <div className="min-h-screen bg-gray-900">
       {/* Header */}
@@ -219,7 +229,6 @@ export default function VerkopBeheren() {
 
         {/* Filters */}
         <div className="flex gap-2 overflow-x-auto pb-1">
-          {/* Actief snelfilter */}
           <button
             onClick={() => setFilterStatus(filterStatus === 'actief' ? 'alle' : 'actief')}
             className={`filter-chip flex items-center gap-1.5 ${filterStatus === 'actief' ? 'bg-blue-600 text-white' : 'bg-gray-800 text-gray-300'}`}
@@ -231,7 +240,6 @@ export default function VerkopBeheren() {
               </span>
             )}
           </button>
-
           <select
             value={filterStatus === 'actief' ? 'alle' : filterStatus}
             onChange={(e) => setFilterStatus(e.target.value)}
@@ -270,102 +278,111 @@ export default function VerkopBeheren() {
         </div>
       )}
 
-      {/* Lijst */}
+      {/* Lijst per account */}
       <div className="border-t border-gray-800 mt-1">
-        {gefilterd.map((v) => (
-          <div key={v.id} className="border-b border-gray-800 px-4 py-3">
-            {/* Bovenste rij: foto + product + prijs/winst */}
-            <div className="flex items-start gap-3 mb-2">
-              <ProductAfbeelding product={v.product} />
-
-              <div className="flex-1 min-w-0">
-                <div className="flex items-start justify-between gap-2">
-                  <p className="text-sm font-semibold text-white leading-tight truncate">{v.product}</p>
-                  <div className="text-right shrink-0">
-                    {prijsEdit?.id === v.id ? (
-                      <div className="flex items-center gap-1">
-                        <span className="text-gray-500 text-xs">€</span>
-                        <input
-                          type="number"
-                          value={prijsEdit.waarde}
-                          onChange={(e) => setPrijsEdit({ id: v.id, waarde: e.target.value })}
-                          onBlur={() => updatePrijs(v.id, prijsEdit.waarde)}
-                          onKeyDown={(e) => { if (e.key === 'Enter') updatePrijs(v.id, prijsEdit.waarde); if (e.key === 'Escape') setPrijsEdit(null) }}
-                          className="w-16 bg-gray-700 text-white text-xs rounded px-1.5 py-0.5 text-right outline-none"
-                          autoFocus step="0.01" inputMode="decimal"
-                        />
-                      </div>
-                    ) : (
-                      <button
-                        onClick={() => setPrijsEdit({ id: v.id, waarde: String(v.verkoopprijs) })}
-                        className="text-sm font-semibold text-white underline decoration-dotted underline-offset-2"
-                      >
-                        {formatEuro(v.verkoopprijs)}
-                      </button>
-                    )}
-                    <p className={`text-xs font-medium mt-0.5 ${v.winst === null ? 'text-gray-600' : v.winst >= 0 ? 'text-emerald-500' : 'text-red-400'}`}>
-                      {v.winst === null ? '—' : `${v.winst >= 0 ? '+' : ''}${formatEuro(v.winst)}`}
-                    </p>
-                  </div>
-                </div>
-
-                {/* Koper · datum · account */}
-                <p className="text-xs text-gray-500 mt-0.5 truncate">
-                  {v.naam_koper} · {formatDatum(v.verkoopdatum)} · {v.account}
-                </p>
-              </div>
-            </div>
-
-            {/* Status dropdown + delete */}
-            <div className="flex items-center gap-2 pl-14">
-              <select
-                value={v.status}
-                onChange={(e) => updateStatus(v.id, e.target.value)}
-                disabled={statusBezig === v.id}
-                className={`flex-1 text-xs bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 disabled:opacity-50 appearance-none outline-none font-medium ${statusKleur(v.status)}`}
-              >
-                {STATUSSEN.map((s) => <option key={s} value={s}>{statusKort(s)}</option>)}
-              </select>
-              <button
-                onClick={() => setVerwijderBevestig(v.id)}
-                className="p-2 rounded-xl bg-gray-800 border border-gray-700 text-gray-500 active:text-red-400 shrink-0"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0" />
-                </svg>
-              </button>
-            </div>
-
-            {/* Notitie */}
-            <div className="pl-14 mt-1.5">
-              {notitieEdit?.id === v.id ? (
-                <input
-                  type="text"
-                  value={notitieEdit.waarde}
-                  onChange={(e) => setNotitieEdit({ id: v.id, waarde: e.target.value })}
-                  onBlur={() => updateNotitie(v.id, notitieEdit.waarde)}
-                  onKeyDown={(e) => { if (e.key === 'Enter') updateNotitie(v.id, notitieEdit.waarde); if (e.key === 'Escape') setNotitieEdit(null) }}
-                  placeholder="Notitie toevoegen..."
-                  className="text-xs bg-gray-700 text-white rounded-lg px-3 py-1.5 w-full outline-none placeholder-gray-500"
-                  autoFocus
-                />
-              ) : (
-                <button
-                  onClick={() => setNotitieEdit({ id: v.id, waarde: v.notitie || '' })}
-                  className={`text-xs text-left ${v.notitie ? 'text-gray-400' : 'text-gray-600'}`}
-                >
-                  {v.notitie || '+ notitie'}
-                </button>
-              )}
-            </div>
-          </div>
-        ))}
-
         {!laden && gefilterd.length === 0 && (
           <div className="text-center text-gray-500 py-16">
             <p className="text-sm">Geen bestellingen gevonden</p>
           </div>
         )}
+
+        {accounts.map((account) => (
+          <div key={account}>
+            {/* Account header */}
+            <div className="px-4 py-2 bg-gray-800/60 border-b border-gray-800">
+              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">{account}</p>
+            </div>
+
+            {rijen(account).map((v) => (
+              <div key={v.id} className="border-b border-gray-800 px-4 py-3">
+                {/* Bovenste rij: foto + info */}
+                <div className="flex items-start gap-3 mb-2">
+                  <ProductAfbeelding product={v.product} />
+
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-white leading-tight truncate">{v.product}</p>
+
+                    {/* Prijs + winst — inline bij de data, niet rechts */}
+                    <div className="flex items-center gap-2 mt-0.5">
+                      {prijsEdit?.id === v.id ? (
+                        <div className="flex items-center gap-1">
+                          <span className="text-gray-500 text-xs">€</span>
+                          <input
+                            type="number"
+                            value={prijsEdit.waarde}
+                            onChange={(e) => setPrijsEdit({ id: v.id, waarde: e.target.value })}
+                            onBlur={() => updatePrijs(v.id, prijsEdit.waarde)}
+                            onKeyDown={(e) => { if (e.key === 'Enter') updatePrijs(v.id, prijsEdit.waarde); if (e.key === 'Escape') setPrijsEdit(null) }}
+                            className="w-16 bg-gray-700 text-white text-xs rounded px-1.5 py-0.5 text-right outline-none"
+                            autoFocus step="0.01" inputMode="decimal"
+                          />
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => setPrijsEdit({ id: v.id, waarde: String(v.verkoopprijs) })}
+                          className="text-sm font-semibold text-white underline decoration-dotted underline-offset-2"
+                        >
+                          {formatEuro(v.verkoopprijs)}
+                        </button>
+                      )}
+                      <span className={`text-xs font-medium ${v.winst === null ? 'text-gray-600' : v.winst >= 0 ? 'text-emerald-500' : 'text-red-400'}`}>
+                        {v.winst === null ? '—' : `${v.winst >= 0 ? '+' : ''}${formatEuro(v.winst)}`}
+                      </span>
+                    </div>
+
+                    {/* Koper · datum */}
+                    <p className="text-xs text-gray-500 mt-0.5 truncate">
+                      {v.naam_koper} · {formatDatum(v.verkoopdatum)}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Status dropdown + delete */}
+                <div className="flex items-center gap-2 pl-14">
+                  <select
+                    value={v.status}
+                    onChange={(e) => updateStatus(v.id, e.target.value)}
+                    disabled={statusBezig === v.id}
+                    className={`flex-1 text-xs bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 disabled:opacity-50 appearance-none outline-none font-medium ${statusKleur(v.status)}`}
+                  >
+                    {STATUSSEN.map((s) => <option key={s} value={s}>{statusKort(s)}</option>)}
+                  </select>
+                  <button
+                    onClick={() => setVerwijderBevestig(v.id)}
+                    className="p-2 rounded-xl bg-gray-800 border border-gray-700 text-gray-500 active:text-red-400 shrink-0"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0" />
+                    </svg>
+                  </button>
+                </div>
+
+                {/* Notitie */}
+                <div className="pl-14 mt-1.5">
+                  {notitieEdit?.id === v.id ? (
+                    <input
+                      type="text"
+                      value={notitieEdit.waarde}
+                      onChange={(e) => setNotitieEdit({ id: v.id, waarde: e.target.value })}
+                      onBlur={() => updateNotitie(v.id, notitieEdit.waarde)}
+                      onKeyDown={(e) => { if (e.key === 'Enter') updateNotitie(v.id, notitieEdit.waarde); if (e.key === 'Escape') setNotitieEdit(null) }}
+                      placeholder="Notitie toevoegen..."
+                      className="text-xs bg-gray-700 text-white rounded-lg px-3 py-1.5 w-full outline-none placeholder-gray-500"
+                      autoFocus
+                    />
+                  ) : (
+                    <button
+                      onClick={() => setNotitieEdit({ id: v.id, waarde: v.notitie || '' })}
+                      className={`text-xs text-left ${v.notitie ? 'text-gray-400' : 'text-gray-600'}`}
+                    >
+                      {v.notitie || '+ notitie'}
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        ))}
       </div>
 
       <style>{`
