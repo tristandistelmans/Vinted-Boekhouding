@@ -18,6 +18,15 @@ type Stats = {
   winstDitJaar: number
   winstDezeMaand: number
   aantalDitJaar: number
+  aantalDezeMaand: number
+  omzetDezeMaand: number
+  kostenProductDezeMaand: number
+  extraKostenDezeMaand: number
+  geldBinnenDezeMaand: number
+  geldVerwachtDezeMaand: number
+  verliesNettoDezeMaand: number
+  winstPerProductDezeMaand: { product: string; winst: number; aantal: number; gemVerkoopprijs: number }[]
+  winstPerAccountDezeMaand: { account: string; winst: number; aantal: number }[]
   winstPerMaand: { naam: string; winst: number }[]
   winstPerProduct: { product: string; winst: number; aantal: number; gemVerkoopprijs: number }[]
   winstPerAccount: { account: string; winst: number; aantal: number }[]
@@ -77,6 +86,8 @@ export default function StatistiekenPage() {
   const maandData = stats.winstPerMaand.filter((m) => m.winst !== 0)
   const topProducten = stats.winstPerProduct.slice(0, 8)
   const top2025 = STATS_2025.winstPerProduct.slice(0, 8)
+  const maandnamen = ['januari','februari','maart','april','mei','juni','juli','augustus','september','oktober','november','december']
+  const huidigeMaand = maandnamen[new Date().getMonth()]
 
   return (
     <div className="px-4 pt-6 pb-4">
@@ -101,6 +112,104 @@ export default function StatistiekenPage() {
 
       {jaar === 2026 ? (
         <>
+          {/* DEZE MAAND */}
+          <p className="text-xs font-semibold text-gray-500 uppercase tracking-widest mb-2">{huidigeMaand}</p>
+          <div className="bg-gray-800 rounded-xl p-4 mb-3">
+            <div className="flex gap-2 mb-4">
+              <div className="flex-1 bg-emerald-900/30 border border-emerald-700/40 rounded-xl p-3 text-center">
+                <p className="text-emerald-400 text-lg font-bold">{formatEuro(stats.geldBinnenDezeMaand)}</p>
+                <p className="text-emerald-700 text-xs mt-0.5">Bevestigd</p>
+              </div>
+              <div className="flex-1 bg-yellow-900/20 border border-yellow-700/30 rounded-xl p-3 text-center">
+                <p className="text-yellow-400 text-lg font-bold">{formatEuro(stats.geldVerwachtDezeMaand)}</p>
+                <p className="text-yellow-700 text-xs mt-0.5">Onderweg</p>
+              </div>
+              {stats.verliesNettoDezeMaand < 0 && (
+                <div className="flex-1 bg-red-900/20 border border-red-700/30 rounded-xl p-3 text-center">
+                  <p className="text-red-400 text-lg font-bold">{formatEuro(stats.verliesNettoDezeMaand)}</p>
+                  <p className="text-red-700 text-xs mt-0.5">Verlies</p>
+                </div>
+              )}
+            </div>
+            <div className="space-y-2 text-sm">
+              <div className="flex justify-between">
+                <span className="text-gray-400">Omzet</span>
+                <span className="text-white font-medium">{formatEuro(stats.omzetDezeMaand)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-400">Kosten producten</span>
+                <span className="text-red-400">− {formatEuro(stats.kostenProductDezeMaand)}</span>
+              </div>
+              {stats.extraKostenDezeMaand > 0 && (
+                <div className="flex justify-between">
+                  <span className="text-gray-400">Extra kosten</span>
+                  <span className="text-red-400">− {formatEuro(stats.extraKostenDezeMaand)}</span>
+                </div>
+              )}
+              <div className="flex justify-between border-t border-gray-700 pt-2">
+                <span className="text-white font-semibold">Netto winst</span>
+                <span className={`font-bold ${(stats.winstDezeMaand - stats.extraKostenDezeMaand) >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                  {formatEuro(stats.winstDezeMaand - stats.extraKostenDezeMaand)}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Per account deze maand */}
+          {stats.winstPerAccountDezeMaand.length > 0 && (
+            <div className="bg-gray-800 rounded-xl p-4 mb-3">
+              <h2 className="text-white font-semibold mb-3">Per account</h2>
+              <div className="space-y-2">
+                {stats.winstPerAccountDezeMaand.map((a) => (
+                  <div key={a.account} className="flex items-center gap-1 py-1">
+                    <span className="text-gray-300 text-sm whitespace-nowrap">{a.account}</span>
+                    <span className="flex-1 border-b border-dotted border-gray-600 mb-0.5 mx-1" />
+                    <div className="flex gap-3 items-center shrink-0">
+                      <span className="text-gray-400 text-xs">{a.aantal}x</span>
+                      <span className={`text-sm font-semibold ${a.winst >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                        {formatEuro(a.winst)}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Bestsellers deze maand */}
+          {stats.winstPerProductDezeMaand.some((p) => p.aantal > 0) && (
+            <div className="bg-gray-800 rounded-xl p-4 mb-6">
+              <h2 className="text-white font-semibold mb-3">Bestsellers</h2>
+              <div className="grid grid-cols-4 gap-1 px-1 mb-2">
+                <span className="text-gray-500 text-xs col-span-2">Product</span>
+                <span className="text-gray-500 text-xs text-right">Gem. prijs</span>
+                <span className="text-gray-500 text-xs text-right">Winst</span>
+              </div>
+              <div className="space-y-2">
+                {stats.winstPerProductDezeMaand
+                  .filter((p) => p.aantal > 0)
+                  .slice(0, 8)
+                  .map((p, i) => (
+                    <div key={p.product} className="grid grid-cols-4 gap-1 items-center py-1">
+                      <div className="col-span-2 flex items-center gap-1.5">
+                        <span className="text-gray-600 text-xs w-4 text-right shrink-0">{i + 1}.</span>
+                        <span className="text-gray-200 text-xs truncate">{p.product}</span>
+                      </div>
+                      <span className="text-gray-400 text-xs text-right">
+                        {p.gemVerkoopprijs > 0 ? formatEuro(p.gemVerkoopprijs) : '—'}
+                      </span>
+                      <span className={`text-xs font-medium text-right ${p.winst >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                        {formatEuro(p.winst)}
+                      </span>
+                    </div>
+                  ))}
+              </div>
+            </div>
+          )}
+
+          {/* DIT JAAR */}
+          <p className="text-xs font-semibold text-gray-500 uppercase tracking-widest mb-2">{new Date().getFullYear()}</p>
+
           {/* Winst per maand 2026 */}
           <div className="bg-gray-800 rounded-xl p-4 mb-4">
             <h2 className="text-white font-semibold mb-4">Winst per maand</h2>

@@ -146,6 +146,48 @@ export async function GET() {
     .filter((v) => v.status === 'Verlies' || v.status === 'Retour')
     .reduce((s, v) => s + (v.winst ?? 0), 0)
 
+  // Maand breakdowns
+  const actieveVerkopenDezeMaand = verkopenDezeMaand.filter((v) => actieveStatussen.includes(v.status))
+  const omzetDezeMaand = actieveVerkopenDezeMaand.reduce((s, v) => s + v.verkoopprijs, 0)
+  const kostenProductDezeMaand = actieveVerkopenDezeMaand.reduce((s, v) => s + v.aankoopprijs, 0)
+  const extraKostenDezeMaand = (extraKostenData || [])
+    .filter((e: { datum: string }) => {
+      const d = new Date(e.datum)
+      return d.getFullYear() === ditJaar && d.getMonth() === dezeMaand
+    })
+    .reduce((s: number, e: { bedrag: number }) => s + e.bedrag, 0)
+
+  const geldBinnenDezeMaand = verkopenDezeMaand
+    .filter((v) => v.status === 'Afgerond (geld binnen)')
+    .reduce((s, v) => s + (v.winst ?? 0), 0)
+
+  const geldVerwachtDezeMaand = verkopenDezeMaand
+    .filter((v) => v.status === 'Verkocht - Nog niet verzonden' || v.status === 'Onderweg')
+    .reduce((s, v) => s + (v.winst ?? 0), 0)
+
+  const verliesNettoDezeMaand = verkopenDezeMaand
+    .filter((v) => v.status === 'Verlies' || v.status === 'Retour')
+    .reduce((s, v) => s + (v.winst ?? 0), 0)
+
+  const winstPerProductDezeMaand = PRODUCTEN.map((product) => {
+    const vk = verkopenDezeMaand.filter((v) => v.product === product)
+    const afgerond = vk.filter((v) => actieveStatussen.includes(v.status))
+    const gemVerkoopprijs = afgerond.length > 0
+      ? afgerond.reduce((s, v) => s + v.verkoopprijs, 0) / afgerond.length
+      : 0
+    return { product, winst: sommeerWinst(vk), aantal: vk.length, gemVerkoopprijs }
+  }).sort((a, b) => b.winst - a.winst)
+
+  const winstPerAccountDezeMaand = accounts
+    .map((account) => {
+      const v = verkopenDezeMaand.filter((v) => v.account === account)
+      return { account, winst: sommeerWinst(v), aantal: v.length }
+    })
+    .filter((a) => a.aantal > 0)
+
+  // Te verzenden: actief openstaand (alle tijden)
+  const teVerzenden = (verkopen || []).filter((v) => v.status === 'Verkocht - Nog niet verzonden').length
+
   return NextResponse.json({
     winstDitJaar: sommeerWinst(verkopenDitJaar),
     winstDezeMaand: sommeerWinst(verkopenDezeMaand),
@@ -158,6 +200,15 @@ export async function GET() {
     geldBinnen,
     geldVerwacht,
     verliesNetto,
+    omzetDezeMaand,
+    kostenProductDezeMaand,
+    extraKostenDezeMaand,
+    geldBinnenDezeMaand,
+    geldVerwachtDezeMaand,
+    verliesNettoDezeMaand,
+    winstPerProductDezeMaand,
+    winstPerAccountDezeMaand,
+    teVerzenden,
     voorraad,
     winstPerMaand,
     winstPerProduct,

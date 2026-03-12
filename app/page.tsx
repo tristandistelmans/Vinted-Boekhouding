@@ -15,6 +15,13 @@ type Stats = {
   geldBinnen: number
   geldVerwacht: number
   verliesNetto: number
+  omzetDezeMaand: number
+  kostenProductDezeMaand: number
+  extraKostenDezeMaand: number
+  geldBinnenDezeMaand: number
+  geldVerwachtDezeMaand: number
+  verliesNettoDezeMaand: number
+  teVerzenden: number
   voorraad: { product: string; in_huis: number; onderweg: number }[]
 }
 
@@ -52,9 +59,53 @@ export default function Dashboard() {
         <>
           {/* DEZE MAAND */}
           <p className="text-xs font-semibold text-gray-500 uppercase tracking-widest mb-2">{huidigeMaand}</p>
+          <div className="bg-gray-800 rounded-xl p-4 mb-3">
+            {/* Winst verdeling maand */}
+            <div className="flex gap-2 mb-4">
+              <div className="flex-1 bg-emerald-900/30 border border-emerald-700/40 rounded-xl p-3 text-center">
+                <p className="text-emerald-400 text-lg font-bold">{formatEuro(stats.geldBinnenDezeMaand)}</p>
+                <p className="text-emerald-700 text-xs mt-0.5">Bevestigd</p>
+              </div>
+              <div className="flex-1 bg-yellow-900/20 border border-yellow-700/30 rounded-xl p-3 text-center">
+                <p className="text-yellow-400 text-lg font-bold">{formatEuro(stats.geldVerwachtDezeMaand)}</p>
+                <p className="text-yellow-700 text-xs mt-0.5">Onderweg</p>
+              </div>
+              {stats.verliesNettoDezeMaand < 0 && (
+                <div className="flex-1 bg-red-900/20 border border-red-700/30 rounded-xl p-3 text-center">
+                  <p className="text-red-400 text-lg font-bold">{formatEuro(stats.verliesNettoDezeMaand)}</p>
+                  <p className="text-red-700 text-xs mt-0.5">Verlies</p>
+                </div>
+              )}
+            </div>
+
+            {/* Omzet / Kosten breakdown maand */}
+            <div className="space-y-2 text-sm">
+              <div className="flex justify-between">
+                <span className="text-gray-400">Omzet</span>
+                <span className="text-white font-medium">{formatEuro(stats.omzetDezeMaand)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-400">Kosten producten</span>
+                <span className="text-red-400">− {formatEuro(stats.kostenProductDezeMaand)}</span>
+              </div>
+              {stats.extraKostenDezeMaand > 0 && (
+                <div className="flex justify-between">
+                  <span className="text-gray-400">Extra kosten</span>
+                  <span className="text-red-400">− {formatEuro(stats.extraKostenDezeMaand)}</span>
+                </div>
+              )}
+              <div className="flex justify-between border-t border-gray-700 pt-2">
+                <span className="text-white font-semibold">Netto winst</span>
+                <span className={`font-bold ${(stats.winstDezeMaand - stats.extraKostenDezeMaand) >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                  {formatEuro(stats.winstDezeMaand - stats.extraKostenDezeMaand)}
+                </span>
+              </div>
+            </div>
+          </div>
+
           <div className="grid grid-cols-2 gap-3 mb-6">
-            <StatCard label="Winst" waarde={formatEuro(stats.winstDezeMaand)} positief={stats.winstDezeMaand >= 0} groot />
             <StatCard label="Verkopen" waarde={String(stats.aantalDezeMaand)} />
+            <StatCard label="Te verzenden" waarde={String(stats.teVerzenden)} />
           </div>
 
           {/* DIT JAAR */}
