@@ -128,6 +128,21 @@ export async function GET() {
 
   const omzetDitJaar = actieveVerkopen.reduce((s, v) => s + v.verkoopprijs, 0)
   const kostenProductDitJaar = actieveVerkopen.reduce((s, v) => s + v.aankoopprijs, 0)
+
+  // Kosten op basis van inkoopdatum (niet verkoopdatum)
+  const kostenInkopenDitJaar = inkopenArr
+    .filter((i: { besteldatum: string; status: string; totale_aankoopprijs: number }) =>
+      new Date(i.besteldatum).getFullYear() === ditJaar && i.status !== 'Beginsaldo'
+    )
+    .reduce((s: number, i: { totale_aankoopprijs: number }) => s + i.totale_aankoopprijs, 0)
+
+  const kostenInkopenDezeMaand = inkopenArr
+    .filter((i: { besteldatum: string; status: string; totale_aankoopprijs: number }) => {
+      const d = new Date(i.besteldatum)
+      return d.getFullYear() === ditJaar && d.getMonth() === dezeMaand && i.status !== 'Beginsaldo'
+    })
+    .reduce((s: number, i: { totale_aankoopprijs: number }) => s + i.totale_aankoopprijs, 0)
+
   const extraKostenDitJaar = (extraKostenData || [])
     .filter((e: { datum: string }) => new Date(e.datum).getFullYear() === ditJaar)
     .reduce((s: number, e: { bedrag: number }) => s + e.bedrag, 0)
@@ -192,6 +207,8 @@ export async function GET() {
     extraKostenDitJaar,
     geldBinnen,
     geldVerwacht,
+    kostenInkopenDitJaar,
+    kostenInkopenDezeMaand,
     omzetDezeMaand,
     kostenProductDezeMaand,
     extraKostenDezeMaand,

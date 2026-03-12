@@ -24,6 +24,7 @@ type Stats = {
   extraKostenDezeMaand: number
   geldBinnenDezeMaand: number
   geldVerwachtDezeMaand: number
+  kostenInkopenDezeMaand: number
   winstPerProductDezeMaand: { product: string; winst: number; aantal: number; gemVerkoopprijs: number }[]
   winstPerAccountDezeMaand: { account: string; winst: number; aantal: number }[]
   winstPerMaand: { naam: string; winst: number }[]
@@ -123,9 +124,9 @@ export default function StatistiekenPage() {
                 <p className="text-yellow-400 text-lg font-bold">{formatEuro(stats.geldVerwachtDezeMaand)}</p>
                 <p className="text-yellow-700 text-xs mt-0.5">Onderweg</p>
               </div>
-              {stats.extraKostenDezeMaand > 0 && (
+              {(stats.kostenInkopenDezeMaand + stats.extraKostenDezeMaand) > 0 && (
                 <div className="flex-1 bg-red-900/20 border border-red-700/30 rounded-xl p-3 text-center">
-                  <p className="text-red-400 text-lg font-bold">− {formatEuro(stats.extraKostenDezeMaand)}</p>
+                  <p className="text-red-400 text-lg font-bold">− {formatEuro(stats.kostenInkopenDezeMaand + stats.extraKostenDezeMaand)}</p>
                   <p className="text-red-700 text-xs mt-0.5">Kosten</p>
                 </div>
               )}
@@ -135,10 +136,12 @@ export default function StatistiekenPage() {
                 <span className="text-gray-400">Omzet</span>
                 <span className="text-white font-medium">{formatEuro(stats.omzetDezeMaand)}</span>
               </div>
-              <div className="flex justify-between">
-                <span className="text-gray-400">Kosten producten</span>
-                <span className="text-red-400">− {formatEuro(stats.kostenProductDezeMaand)}</span>
-              </div>
+              {stats.kostenInkopenDezeMaand > 0 && (
+                <div className="flex justify-between">
+                  <span className="text-gray-400">Inkoopkosten</span>
+                  <span className="text-red-400">− {formatEuro(stats.kostenInkopenDezeMaand)}</span>
+                </div>
+              )}
               {stats.extraKostenDezeMaand > 0 && (
                 <div className="flex justify-between">
                   <span className="text-gray-400">Extra kosten</span>
@@ -146,9 +149,9 @@ export default function StatistiekenPage() {
                 </div>
               )}
               <div className="flex justify-between border-t border-gray-700 pt-2">
-                <span className="text-white font-semibold">Netto winst</span>
-                <span className={`font-bold ${(stats.winstDezeMaand - stats.extraKostenDezeMaand) >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                  {formatEuro(stats.winstDezeMaand - stats.extraKostenDezeMaand)}
+                <span className="text-white font-semibold">Netto</span>
+                <span className={`font-bold ${(stats.omzetDezeMaand - stats.kostenInkopenDezeMaand - stats.extraKostenDezeMaand) >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                  {formatEuro(stats.omzetDezeMaand - stats.kostenInkopenDezeMaand - stats.extraKostenDezeMaand)}
                 </span>
               </div>
             </div>

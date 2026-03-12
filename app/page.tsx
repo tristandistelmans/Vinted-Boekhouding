@@ -14,6 +14,8 @@ type Stats = {
   extraKostenDitJaar: number
   geldBinnen: number
   geldVerwacht: number
+  kostenInkopenDitJaar: number
+  kostenInkopenDezeMaand: number
   omzetDezeMaand: number
   kostenProductDezeMaand: number
   extraKostenDezeMaand: number
@@ -68,9 +70,9 @@ export default function Dashboard() {
                 <p className="text-yellow-400 text-lg font-bold">{formatEuro(stats.geldVerwachtDezeMaand)}</p>
                 <p className="text-yellow-700 text-xs mt-0.5">Onderweg</p>
               </div>
-              {stats.extraKostenDezeMaand > 0 && (
+              {(stats.kostenInkopenDezeMaand + stats.extraKostenDezeMaand) > 0 && (
                 <div className="flex-1 bg-red-900/20 border border-red-700/30 rounded-xl p-3 text-center">
-                  <p className="text-red-400 text-lg font-bold">− {formatEuro(stats.extraKostenDezeMaand)}</p>
+                  <p className="text-red-400 text-lg font-bold">− {formatEuro(stats.kostenInkopenDezeMaand + stats.extraKostenDezeMaand)}</p>
                   <p className="text-red-700 text-xs mt-0.5">Kosten</p>
                 </div>
               )}
@@ -82,10 +84,12 @@ export default function Dashboard() {
                 <span className="text-gray-400">Omzet</span>
                 <span className="text-white font-medium">{formatEuro(stats.omzetDezeMaand)}</span>
               </div>
-              <div className="flex justify-between">
-                <span className="text-gray-400">Kosten producten</span>
-                <span className="text-red-400">− {formatEuro(stats.kostenProductDezeMaand)}</span>
-              </div>
+              {stats.kostenInkopenDezeMaand > 0 && (
+                <div className="flex justify-between">
+                  <span className="text-gray-400">Inkoopkosten</span>
+                  <span className="text-red-400">− {formatEuro(stats.kostenInkopenDezeMaand)}</span>
+                </div>
+              )}
               {stats.extraKostenDezeMaand > 0 && (
                 <div className="flex justify-between">
                   <span className="text-gray-400">Extra kosten</span>
@@ -93,9 +97,9 @@ export default function Dashboard() {
                 </div>
               )}
               <div className="flex justify-between border-t border-gray-700 pt-2">
-                <span className="text-white font-semibold">Netto winst</span>
-                <span className={`font-bold ${(stats.winstDezeMaand - stats.extraKostenDezeMaand) >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                  {formatEuro(stats.winstDezeMaand - stats.extraKostenDezeMaand)}
+                <span className="text-white font-semibold">Netto</span>
+                <span className={`font-bold ${(stats.omzetDezeMaand - stats.kostenInkopenDezeMaand - stats.extraKostenDezeMaand) >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                  {formatEuro(stats.omzetDezeMaand - stats.kostenInkopenDezeMaand - stats.extraKostenDezeMaand)}
                 </span>
               </div>
             </div>
@@ -119,9 +123,9 @@ export default function Dashboard() {
                 <p className="text-yellow-400 text-lg font-bold">{formatEuro(stats.geldVerwacht)}</p>
                 <p className="text-yellow-700 text-xs mt-0.5">Onderweg</p>
               </div>
-              {stats.extraKostenDitJaar > 0 && (
+              {(stats.kostenInkopenDitJaar + stats.extraKostenDitJaar) > 0 && (
                 <div className="flex-1 bg-red-900/20 border border-red-700/30 rounded-xl p-3 text-center">
-                  <p className="text-red-400 text-lg font-bold">− {formatEuro(stats.extraKostenDitJaar)}</p>
+                  <p className="text-red-400 text-lg font-bold">− {formatEuro(stats.kostenInkopenDitJaar + stats.extraKostenDitJaar)}</p>
                   <p className="text-red-700 text-xs mt-0.5">Kosten</p>
                 </div>
               )}
@@ -133,10 +137,12 @@ export default function Dashboard() {
                 <span className="text-gray-400">Omzet</span>
                 <span className="text-white font-medium">{formatEuro(stats.omzetDitJaar)}</span>
               </div>
-              <div className="flex justify-between">
-                <span className="text-gray-400">Kosten producten</span>
-                <span className="text-red-400">− {formatEuro(stats.kostenProductDitJaar)}</span>
-              </div>
+              {stats.kostenInkopenDitJaar > 0 && (
+                <div className="flex justify-between">
+                  <span className="text-gray-400">Inkoopkosten</span>
+                  <span className="text-red-400">− {formatEuro(stats.kostenInkopenDitJaar)}</span>
+                </div>
+              )}
               {stats.extraKostenDitJaar > 0 && (
                 <div className="flex justify-between">
                   <span className="text-gray-400">Extra kosten</span>
@@ -144,9 +150,9 @@ export default function Dashboard() {
                 </div>
               )}
               <div className="flex justify-between border-t border-gray-700 pt-2">
-                <span className="text-white font-semibold">Netto winst</span>
-                <span className={`font-bold ${(stats.winstDitJaar - stats.extraKostenDitJaar) >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                  {formatEuro(stats.winstDitJaar - stats.extraKostenDitJaar)}
+                <span className="text-white font-semibold">Netto</span>
+                <span className={`font-bold ${(stats.omzetDitJaar - stats.kostenInkopenDitJaar - stats.extraKostenDitJaar) >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                  {formatEuro(stats.omzetDitJaar - stats.kostenInkopenDitJaar - stats.extraKostenDitJaar)}
                 </span>
               </div>
             </div>
