@@ -124,12 +124,10 @@ export default function StatistiekenPage() {
                 <p className="text-yellow-400 text-lg font-bold">{formatEuro(stats.geldVerwachtDezeMaand)}</p>
                 <p className="text-yellow-700 text-xs mt-0.5">Onderweg</p>
               </div>
-              {(stats.kostenInkopenDezeMaand + stats.extraKostenDezeMaand) > 0 && (
-                <div className="flex-1 bg-red-900/20 border border-red-700/30 rounded-xl p-3 text-center">
-                  <p className="text-red-400 text-lg font-bold">− {formatEuro(stats.kostenInkopenDezeMaand + stats.extraKostenDezeMaand)}</p>
-                  <p className="text-red-700 text-xs mt-0.5">Kosten</p>
-                </div>
-              )}
+              <div className="flex-1 bg-red-900/20 border border-red-700/30 rounded-xl p-3 text-center">
+                <p className="text-red-400 text-lg font-bold">− {formatEuro(stats.kostenInkopenDezeMaand + stats.extraKostenDezeMaand)}</p>
+                <p className="text-red-700 text-xs mt-0.5">Kosten</p>
+              </div>
             </div>
             <div className="space-y-2 text-sm">
               <div className="flex justify-between">
