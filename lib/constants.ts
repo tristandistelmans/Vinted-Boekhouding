@@ -2,7 +2,7 @@ export const PRODUCTEN = [
   'Porsche Green',
   'Porsche Black',
   'Porsche Red',
-  'Porsche White',
+  'Porsche White Green',
   'NY Navy',
   'NY Beige/Green',
   'UNI Navy',
@@ -57,7 +57,7 @@ export const LISTINGS: Record<string, { titel: string; beschrijving: string }> =
     titel: 'Cap Aime Leon Dore Porsche Cotton Red',
     beschrijving: 'There are no signs of usage. If you have any questions, ask away!',
   },
-  'Porsche White': {
+  'Porsche White Green': {
     titel: 'Cap Aime Leon Dore Porsche Cotton Beige Green',
     beschrijving: 'There are no signs of usage. If you have any questions, ask away!',
   },

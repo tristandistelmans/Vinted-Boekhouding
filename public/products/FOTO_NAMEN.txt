@@ -1,0 +1,17 @@
+Zet je productfoto's in deze map met de volgende bestandsnamen:
+
+porsche-green.jpg
+porsche-black.jpg
+porsche-red.jpg
+porsche-white.jpg
+ny-navy.jpg
+ny-beige-green.jpg
+uni-navy.jpg
+uni-black.jpg
+uni-beige.jpg
+uni-white.jpg
+uni-green.jpg
+uni-blue.jpg
+
+Ondersteunde formaten: .jpg of .png
+Aanbevolen formaat: vierkant (bijv. 400x400px)

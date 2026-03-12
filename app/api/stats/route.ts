@@ -3,11 +3,15 @@ import { supabase } from '@/lib/supabase'
 import { berekenWinst, PRODUCTEN } from '@/lib/constants'
 
 export async function GET() {
-  const [{ data: verkopen, error: vError }, { data: inkopen, error: iError }] =
-    await Promise.all([
-      supabase.from('verkopen').select('*'),
-      supabase.from('inkopen').select('*'),
-    ])
+  const [
+    { data: verkopen, error: vError },
+    { data: inkopen, error: iError },
+    { data: extraKostenData },
+  ] = await Promise.all([
+    supabase.from('verkopen').select('*'),
+    supabase.from('inkopen').select('*'),
+    supabase.from('extra_kosten').select('*'),
+  ])
 
   if (vError || iError) {
     return NextResponse.json({ error: 'Kon stats niet ophalen' }, { status: 500 })
@@ -85,7 +89,7 @@ export async function GET() {
       in_huis: Math.max(0, ingekocht - verkocht),
       onderweg,
     }
-  })
+  }).sort((a, b) => b.in_huis - a.in_huis)
 
   // Winst per maand (dit jaar)
   const maandnamen = ['Jan', 'Feb', 'Mrt', 'Apr', 'Mei', 'Jun', 'Jul', 'Aug', 'Sep', 'Okt', 'Nov', 'Dec']
@@ -94,20 +98,70 @@ export async function GET() {
     return { naam, winst: sommeerWinst(verkopen) }
   })
 
-  // Winst per product (dit jaar)
+  // Winst per product (dit jaar) + gemiddelde verkoopprijs
   const winstPerProduct = PRODUCTEN.map((product) => {
     const verkopen = verkopenDitJaar.filter((v) => v.product === product)
-    return { product, winst: sommeerWinst(verkopen), aantal: verkopen.length }
+    const afgerond = verkopen.filter((v) =>
+      v.status === 'Afgerond (geld binnen)' || v.status === 'Verkocht - Nog niet verzonden' || v.status === 'Onderweg'
+    )
+    const gemVerkoopprijs = afgerond.length > 0
+      ? afgerond.reduce((s, v) => s + v.verkoopprijs, 0) / afgerond.length
+      : 0
+    return { product, winst: sommeerWinst(verkopen), aantal: verkopen.length, gemVerkoopprijs }
   }).sort((a, b) => b.winst - a.winst)
+
+  // Totale waarde in voorraad (in_huis × gemiddelde aankoopprijs)
+  const totaleVoorraadWaarde = voorraad.reduce((sum, item) => {
+    const gemKost = gemKostByProduct[item.product] ?? 0
+    return sum + item.in_huis * gemKost
+  }, 0)
+
+  // Winst per account (dit jaar)
+  const accounts = [...new Set((verkopen || []).map((v) => v.account))].sort()
+  const winstPerAccount = accounts.map((account) => {
+    const v = verkopenDitJaar.filter((v) => v.account === account)
+    return { account, winst: sommeerWinst(v), aantal: v.length }
+  })
+
+  const actieveStatussen = ['Afgerond (geld binnen)', 'Verkocht - Nog niet verzonden', 'Onderweg']
+  const actieveVerkopen = verkopenDitJaar.filter((v) => actieveStatussen.includes(v.status))
+
+  const omzetDitJaar = actieveVerkopen.reduce((s, v) => s + v.verkoopprijs, 0)
+  const kostenProductDitJaar = actieveVerkopen.reduce((s, v) => s + v.aankoopprijs, 0)
+  const extraKostenDitJaar = (extraKostenData || [])
+    .filter((e: { datum: string }) => new Date(e.datum).getFullYear() === ditJaar)
+    .reduce((s: number, e: { bedrag: number }) => s + e.bedrag, 0)
+
+  // geldBinnen/geldVerwacht tonen werkelijke WINST (niet omzet)
+  const geldBinnen = verkopenDitJaar
+    .filter((v) => v.status === 'Afgerond (geld binnen)')
+    .reduce((s, v) => s + (v.winst ?? 0), 0)
+
+  const geldVerwacht = verkopenDitJaar
+    .filter((v) => v.status === 'Verkocht - Nog niet verzonden' || v.status === 'Onderweg')
+    .reduce((s, v) => s + (v.winst ?? 0), 0)
+
+  // Verlies/Retour: negatief effect op winst (verklaring van het verschil)
+  const verliesNetto = verkopenDitJaar
+    .filter((v) => v.status === 'Verlies' || v.status === 'Retour')
+    .reduce((s, v) => s + (v.winst ?? 0), 0)
 
   return NextResponse.json({
     winstDitJaar: sommeerWinst(verkopenDitJaar),
     winstDezeMaand: sommeerWinst(verkopenDezeMaand),
     aantalDezeMaand: verkopenDezeMaand.length,
     aantalDitJaar: verkopenDitJaar.length,
+    totaleVoorraadWaarde,
+    omzetDitJaar,
+    kostenProductDitJaar,
+    extraKostenDitJaar,
+    geldBinnen,
+    geldVerwacht,
+    verliesNetto,
     voorraad,
     winstPerMaand,
     winstPerProduct,
+    winstPerAccount,
   })
 }
 

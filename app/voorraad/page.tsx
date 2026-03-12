@@ -19,9 +19,17 @@ type VoorraadItem = {
   onderweg: number
 }
 
+type ExtraKost = {
+  id: string
+  datum: string
+  omschrijving: string
+  bedrag: number
+}
+
 export default function VoorraadPage() {
   const [inkopen, setInkopen] = useState<Inkoop[]>([])
   const [voorraad, setVooraad] = useState<VoorraadItem[]>([])
+  const [extraKosten, setExtraKosten] = useState<ExtraKost[]>([])
   const [laden, setLaden] = useState(true)
   const [fout, setFout] = useState('')
   const vandaag = new Date().toISOString().split('T')[0]
@@ -33,24 +41,32 @@ export default function VoorraadPage() {
     totale_aankoopprijs: '',
     status: 'In Huis',
   })
+  const [kostForm, setKostForm] = useState({ datum: vandaag, omschrijving: '', bedrag: '' })
   const [bezig, setBezig] = useState(false)
   const [bericht, setBericht] = useState<{ type: 'succes' | 'fout'; tekst: string } | null>(null)
-  const [tabblad, setTabblad] = useState<'overzicht' | 'bestelling'>('overzicht')
+  const [kostBericht, setKostBericht] = useState<{ type: 'succes' | 'fout'; tekst: string } | null>(null)
+  const [tabblad, setTabblad] = useState<'overzicht' | 'bestelling' | 'extra-kosten'>('overzicht')
+  const [bewerkInkoop, setBewerkInkoop] = useState<Inkoop | null>(null)
+  const [verwijderInkoop, setVerwijderInkoop] = useState<string | null>(null)
 
   const laadData = useCallback(async () => {
     setLaden(true)
     try {
-      const [inkoopRes, statsRes] = await Promise.all([
+      const [inkoopRes, statsRes, kostRes] = await Promise.all([
         fetch('/api/inkopen'),
         fetch('/api/stats'),
+        fetch('/api/extra-kosten'),
       ])
       const inkoopData = await inkoopRes.json()
       const statsData = await statsRes.json()
+      const kostData = await kostRes.json()
 
       if (inkoopData.error) setFout(inkoopData.error)
       else setInkopen(inkoopData)
 
       if (statsData.voorraad) setVooraad(statsData.voorraad)
+
+      if (!kostData.error) setExtraKosten(kostData)
     } catch {
       setFout('Kon data niet laden')
     } finally {
@@ -112,15 +128,80 @@ export default function VoorraadPage() {
     }
   }
 
+  async function handleSubmitKost(e: React.FormEvent) {
+    e.preventDefault()
+    setBezig(true)
+    setKostBericht(null)
+    try {
+      const res = await fetch('/api/extra-kosten', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(kostForm),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        setKostBericht({ type: 'fout', tekst: data.error || 'Er ging iets mis' })
+      } else {
+        setKostBericht({ type: 'succes', tekst: `${kostForm.omschrijving} (€${kostForm.bedrag}) toegevoegd!` })
+        setKostForm({ datum: vandaag, omschrijving: '', bedrag: '' })
+        laadData()
+      }
+    } catch {
+      setKostBericht({ type: 'fout', tekst: 'Kon verbinding niet maken' })
+    } finally {
+      setBezig(false)
+    }
+  }
+
+  async function verwijderKost(id: string) {
+    setBezig(true)
+    try {
+      const res = await fetch(`/api/extra-kosten/${id}`, { method: 'DELETE' })
+      if (res.ok) laadData()
+    } finally {
+      setBezig(false)
+    }
+  }
+
+  async function slaInkoopOp(inkoop: Inkoop) {
+    setBezig(true)
+    try {
+      const res = await fetch(`/api/inkopen/${inkoop.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(inkoop),
+      })
+      if (res.ok) {
+        setBewerkInkoop(null)
+        laadData()
+      }
+    } finally {
+      setBezig(false)
+    }
+  }
+
+  async function verwijderInkoopItem(id: string) {
+    setBezig(true)
+    try {
+      const res = await fetch(`/api/inkopen/${id}`, { method: 'DELETE' })
+      if (res.ok) {
+        setVerwijderInkoop(null)
+        laadData()
+      }
+    } finally {
+      setBezig(false)
+    }
+  }
+
   return (
     <div className="px-4 pt-6 pb-4">
       <h1 className="text-2xl font-bold text-white mb-4">Voorraad</h1>
 
       {/* Tabbladen */}
-      <div className="flex gap-2 mb-5 bg-gray-800 rounded-xl p-1">
+      <div className="flex gap-1 mb-5 bg-gray-800 rounded-xl p-1">
         <button
           onClick={() => setTabblad('overzicht')}
-          className={`flex-1 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+          className={`flex-1 py-2.5 rounded-lg text-xs font-medium transition-colors ${
             tabblad === 'overzicht' ? 'bg-blue-600 text-white' : 'text-gray-400'
           }`}
         >
@@ -128,11 +209,19 @@ export default function VoorraadPage() {
         </button>
         <button
           onClick={() => setTabblad('bestelling')}
-          className={`flex-1 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+          className={`flex-1 py-2.5 rounded-lg text-xs font-medium transition-colors ${
             tabblad === 'bestelling' ? 'bg-blue-600 text-white' : 'text-gray-400'
           }`}
         >
-          Inkoop toevoegen
+          Inkoop
+        </button>
+        <button
+          onClick={() => setTabblad('extra-kosten')}
+          className={`flex-1 py-2.5 rounded-lg text-xs font-medium transition-colors ${
+            tabblad === 'extra-kosten' ? 'bg-blue-600 text-white' : 'text-gray-400'
+          }`}
+        >
+          Extra kosten
         </button>
       </div>
 
@@ -145,17 +234,18 @@ export default function VoorraadPage() {
 
       {tabblad === 'overzicht' && !laden && (
         <div className="space-y-2">
-          <div className="grid grid-cols-3 gap-2 px-1 mb-1">
+          <div className="grid gap-2 px-1 mb-1" style={{gridTemplateColumns: '1fr 56px 72px'}}>
             <span className="text-gray-500 text-xs font-medium">Product</span>
             <span className="text-gray-500 text-xs font-medium text-center">In huis</span>
             <span className="text-gray-500 text-xs font-medium text-center">Onderweg</span>
           </div>
-          {voorraad.map((item) => (
+          {[...voorraad].sort((a, b) => b.in_huis - a.in_huis).map((item) => (
             <div
               key={item.product}
-              className={`bg-gray-800 rounded-xl px-4 py-3 grid grid-cols-3 gap-2 items-center ${
+              className={`bg-gray-800 rounded-xl px-4 py-3 grid gap-2 items-center ${
                 item.in_huis === 0 && item.onderweg === 0 ? 'opacity-40' : ''
               }`}
+              style={{gridTemplateColumns: '1fr 56px 72px'}}
             >
               <span className="text-gray-200 text-sm">{item.product}</span>
               <span
@@ -179,7 +269,7 @@ export default function VoorraadPage() {
           {inkopen.filter((i) => i.status !== 'Beginsaldo').length > 0 && (
             <>
               <h2 className="text-white font-semibold mt-5 mb-2">Recente inkopen</h2>
-              {inkopen.filter((i) => i.status !== 'Beginsaldo').slice(0, 10).map((inkoop) => (
+              {inkopen.filter((i) => i.status !== 'Beginsaldo').slice(0, 20).map((inkoop) => (
                 <div key={inkoop.id} className="bg-gray-800 rounded-xl px-4 py-3 flex items-center justify-between">
                   <div>
                     <p className="text-gray-200 text-sm font-medium">
@@ -189,25 +279,115 @@ export default function VoorraadPage() {
                       {new Date(inkoop.besteldatum).toLocaleDateString('nl-NL')}
                     </p>
                   </div>
-                  <div className="text-right">
-                    <span
-                      className={`text-xs px-2 py-0.5 rounded-full ${
-                        inkoop.status === 'In Huis'
-                          ? 'bg-emerald-900/40 text-emerald-400'
-                          : 'bg-yellow-900/40 text-yellow-400'
-                      }`}
+                  <div className="flex items-center gap-2">
+                    <div className="text-right">
+                      <span className={`text-xs px-2 py-0.5 rounded-full ${
+                        inkoop.status === 'In Huis' ? 'bg-emerald-900/40 text-emerald-400' : 'bg-yellow-900/40 text-yellow-400'
+                      }`}>
+                        {inkoop.status}
+                      </span>
+                      {inkoop.prijs_per_stuk > 0 && (
+                        <p className="text-gray-400 text-xs mt-0.5">€{inkoop.prijs_per_stuk.toFixed(2)}/stuk</p>
+                      )}
+                    </div>
+                    <button
+                      onClick={() => setBewerkInkoop(inkoop)}
+                      className="p-1.5 rounded-lg bg-gray-700 text-blue-400 active:bg-gray-600"
                     >
-                      {inkoop.status}
-                    </span>
-                    {inkoop.prijs_per_stuk > 0 && (
-                      <p className="text-gray-400 text-xs mt-0.5">
-                        €{inkoop.prijs_per_stuk.toFixed(2)}/stuk
-                      </p>
-                    )}
+                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Z" />
+                      </svg>
+                    </button>
+                    <button
+                      onClick={() => setVerwijderInkoop(inkoop.id)}
+                      className="p-1.5 rounded-lg bg-gray-700 text-red-400 active:bg-gray-600"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0" />
+                      </svg>
+                    </button>
                   </div>
                 </div>
               ))}
             </>
+          )}
+
+          {/* Bewerk inkoop modal */}
+          {bewerkInkoop && (
+            <div className="fixed inset-0 bg-black/70 z-50 flex items-end justify-center">
+              <div className="bg-gray-900 rounded-t-2xl pt-6 px-6 pb-24 w-full max-w-lg overflow-y-auto max-h-[95vh]">
+                <h2 className="text-white text-lg font-semibold mb-4">Inkoop bewerken</h2>
+                <div className="space-y-3">
+                  <div className="space-y-1">
+                    <label className="text-gray-400 text-sm">Datum</label>
+                    <input type="date" value={bewerkInkoop.besteldatum}
+                      onChange={(e) => setBewerkInkoop({ ...bewerkInkoop, besteldatum: e.target.value })}
+                      className="w-full bg-gray-800 border border-gray-700 text-white rounded-xl px-4 py-3" />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-gray-400 text-sm">Product</label>
+                    <select value={bewerkInkoop.product}
+                      onChange={(e) => setBewerkInkoop({ ...bewerkInkoop, product: e.target.value })}
+                      className="w-full bg-gray-800 border border-gray-700 text-white rounded-xl px-4 py-3">
+                      {PRODUCTEN.map((p) => <option key={p} value={p}>{p}</option>)}
+                    </select>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <label className="text-gray-400 text-sm">Aantal</label>
+                      <input type="number" value={bewerkInkoop.aantal} min="1"
+                        onChange={(e) => setBewerkInkoop({ ...bewerkInkoop, aantal: Number(e.target.value) })}
+                        className="w-full bg-gray-800 border border-gray-700 text-white rounded-xl px-4 py-3" />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-gray-400 text-sm">Totaalprijs (€)</label>
+                      <input type="number" value={bewerkInkoop.totale_aankoopprijs} min="0" step="0.01"
+                        onChange={(e) => setBewerkInkoop({ ...bewerkInkoop, totale_aankoopprijs: Number(e.target.value) })}
+                        className="w-full bg-gray-800 border border-gray-700 text-white rounded-xl px-4 py-3" />
+                    </div>
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-gray-400 text-sm">Status</label>
+                    <select value={bewerkInkoop.status}
+                      onChange={(e) => setBewerkInkoop({ ...bewerkInkoop, status: e.target.value })}
+                      className="w-full bg-gray-800 border border-gray-700 text-white rounded-xl px-4 py-3">
+                      <option value="In Huis">In Huis</option>
+                      <option value="Onderweg">Onderweg</option>
+                    </select>
+                  </div>
+                </div>
+                <div className="flex gap-3 mt-5">
+                  <button onClick={() => setBewerkInkoop(null)}
+                    className="flex-1 py-3 rounded-xl bg-gray-700 text-white font-medium">
+                    Annuleren
+                  </button>
+                  <button onClick={() => slaInkoopOp(bewerkInkoop)} disabled={bezig}
+                    className="flex-1 py-3 rounded-xl bg-blue-600 text-white font-medium disabled:opacity-50">
+                    {bezig ? 'Bezig...' : 'Opslaan'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Verwijder inkoop bevestiging */}
+          {verwijderInkoop && (
+            <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
+              <div className="bg-gray-800 rounded-2xl p-6 w-full max-w-sm">
+                <h2 className="text-white text-lg font-semibold mb-2">Inkoop verwijderen?</h2>
+                <p className="text-gray-400 text-sm mb-5">Dit kan niet ongedaan worden gemaakt.</p>
+                <div className="flex gap-3">
+                  <button onClick={() => setVerwijderInkoop(null)}
+                    className="flex-1 py-3 rounded-xl bg-gray-700 text-white font-medium">
+                    Annuleren
+                  </button>
+                  <button onClick={() => verwijderInkoopItem(verwijderInkoop)} disabled={bezig}
+                    className="flex-1 py-3 rounded-xl bg-red-600 text-white font-medium disabled:opacity-50">
+                    {bezig ? 'Bezig...' : 'Verwijderen'}
+                  </button>
+                </div>
+              </div>
+            </div>
           )}
         </div>
       )}
@@ -301,6 +481,69 @@ export default function VoorraadPage() {
               {bezig ? 'Bezig...' : 'Toevoegen'}
             </button>
           </form>
+        </div>
+      )}
+
+      {tabblad === 'extra-kosten' && (
+        <div>
+          {kostBericht && (
+            <div className={`rounded-xl p-4 mb-5 text-sm font-medium ${
+              kostBericht.type === 'succes'
+                ? 'bg-emerald-900/40 border border-emerald-700 text-emerald-300'
+                : 'bg-red-900/40 border border-red-700 text-red-300'
+            }`}>
+              {kostBericht.tekst}
+            </div>
+          )}
+
+          <form onSubmit={handleSubmitKost} className="space-y-4 mb-6">
+            <Veld label="Datum">
+              <input type="date" value={kostForm.datum}
+                onChange={(e) => setKostForm((p) => ({ ...p, datum: e.target.value }))}
+                className="veld-input" required />
+            </Veld>
+            <Veld label="Omschrijving">
+              <input type="text" value={kostForm.omschrijving}
+                onChange={(e) => setKostForm((p) => ({ ...p, omschrijving: e.target.value }))}
+                placeholder="bv. Verzendzakjes, Tape..."
+                className="veld-input" required />
+            </Veld>
+            <Veld label="Bedrag (€)">
+              <input type="number" value={kostForm.bedrag}
+                onChange={(e) => setKostForm((p) => ({ ...p, bedrag: e.target.value }))}
+                placeholder="0.00" className="veld-input" min="0" step="0.01"
+                inputMode="decimal" required />
+            </Veld>
+            <button type="submit" disabled={bezig}
+              className="w-full py-4 rounded-xl bg-blue-600 text-white text-lg font-semibold disabled:opacity-50 active:bg-blue-700 transition-colors">
+              {bezig ? 'Bezig...' : 'Toevoegen'}
+            </button>
+          </form>
+
+          {extraKosten.length > 0 && (
+            <>
+              <h2 className="text-white font-semibold mb-2">Overzicht extra kosten</h2>
+              <div className="space-y-2">
+                {extraKosten.map((k) => (
+                  <div key={k.id} className="bg-gray-800 rounded-xl px-4 py-3 flex items-center justify-between">
+                    <div>
+                      <p className="text-gray-200 text-sm font-medium">{k.omschrijving}</p>
+                      <p className="text-gray-500 text-xs">{new Date(k.datum).toLocaleDateString('nl-NL')}</p>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <span className="text-red-400 font-semibold text-sm">− €{k.bedrag.toFixed(2)}</span>
+                      <button onClick={() => verwijderKost(k.id)} disabled={bezig}
+                        className="p-1.5 rounded-lg bg-gray-700 text-red-400 active:bg-gray-600 disabled:opacity-50">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0" />
+                        </svg>
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
         </div>
       )}
 

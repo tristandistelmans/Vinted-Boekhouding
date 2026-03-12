@@ -13,6 +13,7 @@ export default function VerkopInvoeren() {
     verkoopprijs: '50',
     status: 'Verkocht - Nog niet verzonden',
     account: ACCOUNTS[0],
+    notitie: '',
   })
   const [bezig, setBezig] = useState(false)
   const [bericht, setBericht] = useState<{ type: 'succes' | 'fout'; tekst: string } | null>(null)
@@ -46,6 +47,7 @@ export default function VerkopInvoeren() {
           verkoopprijs: '50',
           status: 'Verkocht - Nog niet verzonden',
           account: ACCOUNTS[0],
+          notitie: '',
         })
       }
     } catch {
@@ -152,6 +154,17 @@ export default function VerkopInvoeren() {
               </option>
             ))}
           </select>
+        </Veld>
+
+        <Veld label="Notitie (optioneel)">
+          <textarea
+            value={form.notitie}
+            onChange={(e) => updateForm('notitie', e.target.value)}
+            placeholder="Extra info, opmerking..."
+            className="veld-input"
+            rows={2}
+            style={{ resize: 'none' }}
+          />
         </Veld>
 
         <button

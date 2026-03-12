@@ -13,6 +13,7 @@ export async function PUT(
   if (body.verkoopprijs !== undefined) updateData.verkoopprijs = Number(body.verkoopprijs)
   if (body.naam_koper !== undefined) updateData.naam_koper = body.naam_koper
   if (body.verkoopdatum !== undefined) updateData.verkoopdatum = body.verkoopdatum
+  if (body.notitie !== undefined) updateData.notitie = body.notitie || null
 
   const { data, error } = await supabase
     .from('verkopen')

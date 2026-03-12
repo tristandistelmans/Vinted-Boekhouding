@@ -26,7 +26,7 @@ export async function GET() {
 
 export async function POST(request: Request) {
   const body = await request.json()
-  const { verkoopdatum, product, naam_koper, verkoopprijs, status, account } = body
+  const { verkoopdatum, product, naam_koper, verkoopprijs, status, account, notitie } = body
 
   if (!verkoopdatum || !product || !naam_koper || !verkoopprijs || !status || !account) {
     return NextResponse.json({ error: 'Alle velden zijn verplicht' }, { status: 400 })
@@ -34,7 +34,7 @@ export async function POST(request: Request) {
 
   const { data, error } = await supabase
     .from('verkopen')
-    .insert([{ verkoopdatum, product, naam_koper, verkoopprijs: Number(verkoopprijs), status, account }])
+    .insert([{ verkoopdatum, product, naam_koper, verkoopprijs: Number(verkoopprijs), status, account, notitie: notitie || null }])
     .select()
     .single()
 
