@@ -83,6 +83,47 @@ export const LISTINGS: Record<string, { titel: string; beschrijving: string }> =
   },
 }
 
+// Mapping van Vinted listing-titels (keywords) naar onze productnamen.
+// Volgorde is belangrijk: eerste match wint.
+export const VINTED_PRODUCT_MAPPING: { keywords: string[]; product: string }[] = [
+  // Porsche caps (check kleur na 'porsche')
+  { keywords: ['porsche', 'black'], product: 'Porsche Black' },
+  { keywords: ['porsche', 'red'], product: 'Porsche Red' },
+  { keywords: ['porsche', 'green', 'beige'], product: 'Porsche White Green' },
+  { keywords: ['porsche', 'beige'], product: 'Porsche White Green' },
+  { keywords: ['porsche', 'white'], product: 'Porsche White Green' },
+  { keywords: ['porsche', 'green'], product: 'Porsche Green' },
+  // NY caps
+  { keywords: ['yankees', 'navy'], product: 'NY Navy' },
+  { keywords: ['yankees', 'beige'], product: 'NY Beige/Green' },
+  { keywords: ['ny', 'navy'], product: 'NY Navy' },
+  { keywords: ['ny', 'beige'], product: 'NY Beige/Green' },
+  // UNI caps
+  { keywords: ['unisphere', 'black'], product: 'UNI Black' },
+  { keywords: ['unisphere', 'beige'], product: 'UNI Beige' },
+  { keywords: ['unisphere', 'navy'], product: 'UNI Navy' },
+  { keywords: ['unisphere', 'white'], product: 'UNI White' },
+  { keywords: ['unisphere', 'nylon'], product: 'UNI White' },
+  { keywords: ['unisphere', 'blue'], product: 'UNI Blue' },
+  { keywords: ['unisphere', 'green'], product: 'UNI Green' },
+  // Overige producten
+  { keywords: ['acne', 'hoodie'], product: 'Acne Hoodie' },
+  { keywords: ['ald', 'tote'], product: 'ALD Tote Bag' },
+  { keywords: ['ald', 'tee'], product: 'ALD Tee' },
+  { keywords: ['golden', 'goose'], product: 'Golden Goose' },
+  { keywords: ['margiela'], product: 'Maison Margiela' },
+]
+
+export function mapVintedProduct(title: string): string {
+  const lower = title.toLowerCase()
+  for (const { keywords, product } of VINTED_PRODUCT_MAPPING) {
+    if (keywords.every((kw) => lower.includes(kw))) {
+      return product
+    }
+  }
+  return 'Onbekend'
+}
+
 export function berekenWinst(
   status: string,
   verkoopprijs: number,
