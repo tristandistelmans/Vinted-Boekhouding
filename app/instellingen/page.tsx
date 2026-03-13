@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { parseResoledOutput } from '@/lib/vinted-client'
 
 interface SyncResultaat {
   nieuw: number
@@ -9,10 +10,11 @@ interface SyncResultaat {
 }
 
 export default function InstellingenPage() {
-  const [token, setToken] = useState('')
-  const [tokenGewijzigd, setTokenGewijzigd] = useState(false)
+  const [rawInput, setRawInput] = useState('')
+  const [heeftToken, setHeeftToken] = useState(false)
   const [opslaan, setOpslaan] = useState(false)
   const [opslaanBericht, setOpslaanBericht] = useState<{ ok: boolean; tekst: string } | null>(null)
+  const [parseError, setParseError] = useState<string | null>(null)
 
   const [syncBezig, setSyncBezig] = useState(false)
   const [syncResultaat, setSyncResultaat] = useState<SyncResultaat | null>(null)
@@ -26,27 +28,46 @@ export default function InstellingenPage() {
       .then((data) => {
         const rows: { sleutel: string; waarde: string }[] = data.instellingen || []
         const map = Object.fromEntries(rows.map((r) => [r.sleutel, r.waarde]))
-        if (map.vinted_token) setToken('••••••••••••••••')
+        if (map.vinted_access_token) setHeeftToken(true)
         if (map.laatste_sync) setLaatsteSyncTijd(map.laatste_sync)
       })
       .catch(() => {})
   }, [])
 
   async function handleOpslaan() {
-    if (!tokenGewijzigd) return
-    setOpslaan(true)
+    setParseError(null)
     setOpslaanBericht(null)
+
+    const parsed = parseResoledOutput(rawInput)
+    if (!parsed) {
+      setParseError('Kan de tokens niet herkennen. Kopieer de volledige output van de Resoled Token Tool.')
+      return
+    }
+
+    setOpslaan(true)
     try {
-      const resp = await fetch('/api/instellingen', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sleutel: 'vinted_token', waarde: token }),
-      })
-      const ok = resp.ok
-      setOpslaanBericht({ ok, tekst: ok ? 'Token opgeslagen' : 'Opslaan mislukt' })
-      if (ok) setTokenGewijzigd(false)
+      await Promise.all([
+        fetch('/api/instellingen', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sleutel: 'vinted_access_token', waarde: parsed.accessToken }),
+        }),
+        fetch('/api/instellingen', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sleutel: 'vinted_refresh_token', waarde: parsed.refreshToken }),
+        }),
+        fetch('/api/instellingen', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sleutel: 'vinted_xcsrf_token', waarde: parsed.xcsrfToken }),
+        }),
+      ])
+      setOpslaanBericht({ ok: true, tekst: 'Tokens opgeslagen' })
+      setHeeftToken(true)
+      setRawInput('')
     } catch {
-      setOpslaanBericht({ ok: false, tekst: 'Verbindingsfout' })
+      setOpslaanBericht({ ok: false, tekst: 'Opslaan mislukt' })
     } finally {
       setOpslaan(false)
     }
@@ -59,9 +80,8 @@ export default function InstellingenPage() {
     try {
       const resp = await fetch('/api/vinted/sync', { method: 'POST' })
       const data = await resp.json()
-      if (!resp.ok) {
-        setSyncFout(data.error || 'Sync mislukt')
-      } else {
+      if (!resp.ok) setSyncFout(data.error || 'Sync mislukt')
+      else {
         setSyncResultaat(data)
         setLaatsteSyncTijd(new Date().toISOString())
       }
@@ -72,16 +92,14 @@ export default function InstellingenPage() {
     }
   }
 
-  const formatSyncTijd = (iso: string) => {
-    const d = new Date(iso)
-    return d.toLocaleString('nl-NL', {
+  const formatSyncTijd = (iso: string) =>
+    new Date(iso).toLocaleString('nl-NL', {
       day: '2-digit',
       month: '2-digit',
       year: 'numeric',
       hour: '2-digit',
       minute: '2-digit',
     })
-  }
 
   return (
     <main className="min-h-screen bg-gray-950 text-white pb-24">
@@ -90,51 +108,60 @@ export default function InstellingenPage() {
 
         {/* Token invoer */}
         <section className="bg-gray-900 rounded-xl p-4 space-y-4">
-          <h2 className="font-semibold text-gray-200">Vinted token – jesuslata</h2>
+          <div className="flex items-center justify-between">
+            <h2 className="font-semibold text-gray-200">Vinted tokens – jesuslata</h2>
+            {heeftToken && (
+              <span className="text-xs text-emerald-400 flex items-center gap-1">
+                <span className="w-2 h-2 bg-emerald-400 rounded-full inline-block" />
+                Ingesteld
+              </span>
+            )}
+          </div>
 
           <div className="bg-gray-800 rounded-lg p-3 space-y-1 text-xs text-gray-400">
-            <p className="font-medium text-gray-300">Hoe krijg je je token?</p>
+            <p className="font-medium text-gray-300">Stappen:</p>
             <ol className="list-decimal list-inside space-y-0.5">
-              <li>Open de <span className="text-white">Resoled Token Tool</span> extensie in Chrome</li>
-              <li>Kopieer de token die getoond wordt</li>
+              <li>Open de <span className="text-white font-medium">Resoled Token Tool</span> Chrome extensie op Vinted</li>
+              <li>Klik "Copy" of kopieer de volledige output</li>
               <li>Plak hieronder en klik Opslaan</li>
             </ol>
-            <p className="text-gray-500 pt-1">Token verloopt na ~1 uur — vernieuw wanneer sync mislukt</p>
+            <p className="text-gray-500 pt-1">
+              Tokens worden automatisch vernieuwd (~7 dagen geldig).
+              Alleen na een week moet je nieuwe tokens plakken.
+            </p>
           </div>
 
           <div>
-            <label className="block text-sm text-gray-400 mb-1">Bearer token</label>
+            <label className="block text-sm text-gray-400 mb-1">
+              Resoled Token Tool output
+            </label>
             <textarea
-              value={token}
+              value={rawInput}
               onChange={(e) => {
-                setToken(e.target.value)
-                setTokenGewijzigd(true)
+                setRawInput(e.target.value)
+                setParseError(null)
+                setOpslaanBericht(null)
               }}
-              onFocus={() => {
-                if (!tokenGewijzigd) setToken('')
-              }}
-              rows={3}
-              placeholder="Plak hier je Vinted token..."
+              rows={4}
+              placeholder="Bearer access_token: eyJ... refresh_token: eyJ... xcsrf_token: ..."
               autoCapitalize="none"
               autoCorrect="off"
               className="w-full bg-gray-800 text-white rounded-lg px-3 py-2 text-xs font-mono border border-gray-700 focus:outline-none focus:border-blue-500 resize-none"
             />
           </div>
 
+          {parseError && <p className="text-xs text-red-400">{parseError}</p>}
+
           <button
             onClick={handleOpslaan}
-            disabled={opslaan || !tokenGewijzigd || !token}
+            disabled={opslaan || !rawInput.trim()}
             className="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-medium rounded-lg py-2 text-sm transition-colors"
           >
             {opslaan ? 'Opslaan...' : 'Opslaan'}
           </button>
 
           {opslaanBericht && (
-            <p
-              className={`text-sm text-center ${
-                opslaanBericht.ok ? 'text-emerald-400' : 'text-red-400'
-              }`}
-            >
+            <p className={`text-sm text-center ${opslaanBericht.ok ? 'text-emerald-400' : 'text-red-400'}`}>
               {opslaanBericht.tekst}
             </p>
           )}
@@ -152,13 +179,13 @@ export default function InstellingenPage() {
           </div>
 
           <p className="text-sm text-gray-400">
-            Haalt alle verkopen op van je Vinted account en importeert ze automatisch. Alleen de
-            status van bestaande verkopen wordt bijgewerkt.
+            Haalt alle verkopen op en importeert ze automatisch. Alleen de status van bestaande
+            verkopen wordt bijgewerkt.
           </p>
 
           <button
             onClick={handleSync}
-            disabled={syncBezig}
+            disabled={syncBezig || !heeftToken}
             className="w-full bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-medium rounded-lg py-2 text-sm transition-colors"
           >
             {syncBezig ? 'Synchroniseren...' : 'Sync nu'}
@@ -172,13 +199,9 @@ export default function InstellingenPage() {
               </p>
               {syncResultaat.fouten.length > 0 && (
                 <div className="mt-2 space-y-1">
-                  <p className="text-xs text-red-400 font-medium">
-                    {syncResultaat.fouten.length} fout(en):
-                  </p>
+                  <p className="text-xs text-red-400 font-medium">{syncResultaat.fouten.length} fout(en):</p>
                   {syncResultaat.fouten.slice(0, 5).map((f, i) => (
-                    <p key={i} className="text-xs text-red-300">
-                      {f}
-                    </p>
+                    <p key={i} className="text-xs text-red-300">{f}</p>
                   ))}
                 </div>
               )}
@@ -196,7 +219,7 @@ export default function InstellingenPage() {
         <section className="bg-gray-900 rounded-xl p-4 space-y-2">
           <h2 className="font-semibold text-gray-200 text-sm">Info</h2>
           <ul className="text-xs text-gray-400 space-y-1 list-disc list-inside">
-            <li>Productnamen worden automatisch herkend via de listing-titel</li>
+            <li>Productnamen worden herkend via de listing-titel (keyword matching)</li>
             <li>Niet-herkende producten verschijnen als "Onbekend" — corrigeerbaar in Bestellingen</li>
             <li>Handmatig ingevoerde verkopen worden nooit overschreven</li>
             <li>Account 2 (disteltr) kan later worden toegevoegd</li>

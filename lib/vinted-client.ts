@@ -25,7 +25,34 @@ export interface VintedOrder {
   updated_at: string
 }
 
-export async function fetchOrders(token: string): Promise<VintedOrder[]> {
+export interface ParsedTokens {
+  accessToken: string
+  refreshToken: string
+  xcsrfToken: string
+}
+
+/**
+ * Parst de volledige output van de Resoled Token Tool:
+ * "Bearer access_token: eyJ... refresh_token: eyJ... xcsrf_token: uuid"
+ */
+export function parseResoledOutput(input: string): ParsedTokens | null {
+  const accessMatch = input.match(/access_token:\s*(\S+)/)
+  const refreshMatch = input.match(/refresh_token:\s*(\S+)/)
+  const xcsrfMatch = input.match(/xcsrf_token:\s*(\S+)/)
+
+  if (!accessMatch?.[1]) return null
+
+  return {
+    accessToken: accessMatch[1],
+    refreshToken: refreshMatch?.[1] || '',
+    xcsrfToken: xcsrfMatch?.[1] || '',
+  }
+}
+
+export async function fetchOrders(
+  accessToken: string,
+  xcsrfToken?: string
+): Promise<VintedOrder[]> {
   const orders: VintedOrder[] = []
   let page = 1
   const perPage = 100
@@ -36,13 +63,14 @@ export async function fetchOrders(token: string): Promise<VintedOrder[]> {
       {
         headers: {
           ...DEFAULT_HEADERS,
-          Authorization: `Bearer ${token}`,
+          Authorization: `Bearer ${accessToken}`,
+          ...(xcsrfToken ? { 'X-CSRF-Token': xcsrfToken } : {}),
         },
       }
     )
 
     if (resp.status === 401) {
-      throw new Error('Token verlopen of ongeldig — vernieuw je token via de Resoled Token Tool')
+      throw new TokenExpiredError()
     }
 
     if (!resp.ok) {
@@ -55,10 +83,49 @@ export async function fetchOrders(token: string): Promise<VintedOrder[]> {
 
     if (batch.length < perPage) break
     page++
-    if (page > 10) break // max 1000 orders
+    if (page > 10) break
   }
 
   return orders
+}
+
+export class TokenExpiredError extends Error {
+  constructor() {
+    super('Access token verlopen')
+  }
+}
+
+/**
+ * Vernieuwt het access token via de refresh token.
+ * Geeft het nieuwe access token terug.
+ */
+export async function refreshAccessToken(refreshToken: string): Promise<string> {
+  const resp = await fetch(`${VINTED_BASE}/oauth/token`, {
+    method: 'POST',
+    headers: {
+      ...DEFAULT_HEADERS,
+      'Content-Type': 'application/x-www-form-urlencoded',
+    },
+    body: new URLSearchParams({
+      grant_type: 'refresh_token',
+      refresh_token: refreshToken,
+      client_id: 'web',
+    }).toString(),
+  })
+
+  if (!resp.ok) {
+    throw new Error(
+      `Token vernieuwen mislukt (${resp.status}) — haal een nieuwe token op via de Resoled Token Tool`
+    )
+  }
+
+  const data = await resp.json()
+
+  if (!data.access_token) {
+    throw new Error('Onverwacht antwoord bij token refresh')
+  }
+
+  return data.access_token
 }
 
 export function mapVintedStatus(status: string): string {

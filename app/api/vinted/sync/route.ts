@@ -1,6 +1,11 @@
 import { NextResponse } from 'next/server'
 import { getSupabase } from '@/lib/supabase'
-import { fetchOrders, mapVintedStatus } from '@/lib/vinted-client'
+import {
+  fetchOrders,
+  refreshAccessToken,
+  mapVintedStatus,
+  TokenExpiredError,
+} from '@/lib/vinted-client'
 import { mapVintedProduct } from '@/lib/constants'
 
 interface SyncResult {
@@ -12,21 +17,27 @@ interface SyncResult {
 export async function POST() {
   const supabase = getSupabase()
 
-  // 1. Laad token uit instellingen
+  // 1. Laad tokens uit instellingen
   const { data: rows, error: settingsError } = await supabase
     .from('instellingen')
     .select('sleutel, waarde')
-    .eq('sleutel', 'vinted_token')
+    .in('sleutel', ['vinted_access_token', 'vinted_refresh_token', 'vinted_xcsrf_token'])
 
   if (settingsError) {
     return NextResponse.json({ error: 'Kan instellingen niet laden' }, { status: 500 })
   }
 
-  const token = rows?.[0]?.waarde
+  const settings = Object.fromEntries(
+    (rows || []).map((r: { sleutel: string; waarde: string }) => [r.sleutel, r.waarde])
+  )
 
-  if (!token) {
+  let accessToken = settings.vinted_access_token
+  const refreshToken = settings.vinted_refresh_token
+  const xcsrfToken = settings.vinted_xcsrf_token
+
+  if (!accessToken) {
     return NextResponse.json(
-      { error: 'Geen Vinted token ingesteld — plak je token in de instellingen' },
+      { error: 'Geen token ingesteld — plak de Resoled Token Tool output in de instellingen' },
       { status: 400 }
     )
   }
@@ -34,7 +45,33 @@ export async function POST() {
   const result: SyncResult = { nieuw: 0, bijgewerkt: 0, fouten: [] }
 
   try {
-    const orders = await fetchOrders(token)
+    let orders
+
+    try {
+      orders = await fetchOrders(accessToken, xcsrfToken)
+    } catch (e) {
+      if (e instanceof TokenExpiredError && refreshToken) {
+        // Access token verlopen → vernieuwen met refresh token
+        try {
+          accessToken = await refreshAccessToken(refreshToken)
+          // Sla nieuw access token op
+          await supabase.from('instellingen').upsert(
+            {
+              sleutel: 'vinted_access_token',
+              waarde: accessToken,
+              bijgewerkt_op: new Date().toISOString(),
+            },
+            { onConflict: 'sleutel' }
+          )
+          orders = await fetchOrders(accessToken, xcsrfToken)
+        } catch (refreshError) {
+          const msg = refreshError instanceof Error ? refreshError.message : 'Refresh mislukt'
+          return NextResponse.json({ error: msg }, { status: 401 })
+        }
+      } else {
+        throw e
+      }
+    }
 
     for (const order of orders) {
       try {
@@ -60,11 +97,8 @@ export async function POST() {
               .update({ status })
               .eq('id', existing.id)
 
-            if (error) {
-              result.fouten.push(`Order ${transactionId}: ${error.message}`)
-            } else {
-              result.bijgewerkt++
-            }
+            if (error) result.fouten.push(`Order ${transactionId}: ${error.message}`)
+            else result.bijgewerkt++
           }
         } else {
           const { error } = await supabase.from('verkopen').insert({
@@ -77,11 +111,8 @@ export async function POST() {
             vinted_transaction_id: transactionId,
           })
 
-          if (error) {
-            result.fouten.push(`Order ${transactionId}: ${error.message}`)
-          } else {
-            result.nieuw++
-          }
+          if (error) result.fouten.push(`Order ${transactionId}: ${error.message}`)
+          else result.nieuw++
         }
       } catch (e) {
         result.fouten.push(
@@ -99,8 +130,10 @@ export async function POST() {
       { onConflict: 'sleutel' }
     )
   } catch (e) {
-    const msg = e instanceof Error ? e.message : 'Onbekende fout'
-    return NextResponse.json({ error: msg }, { status: 500 })
+    return NextResponse.json(
+      { error: e instanceof Error ? e.message : 'Onbekende fout' },
+      { status: 500 }
+    )
   }
 
   return NextResponse.json(result)
