@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import { parseResoledOutput } from '@/lib/vinted-client'
 
 interface SyncResultaat {
@@ -10,6 +11,7 @@ interface SyncResultaat {
 }
 
 export default function InstellingenPage() {
+  const router = useRouter()
   const [rawInput, setRawInput] = useState('')
   const [heeftToken, setHeeftToken] = useState(false)
   const [opslaan, setOpslaan] = useState(false)
@@ -224,6 +226,19 @@ export default function InstellingenPage() {
             <li>Handmatig ingevoerde verkopen worden nooit overschreven</li>
             <li>Account 2 (disteltr) kan later worden toegevoegd</li>
           </ul>
+        </section>
+
+        {/* Uitloggen */}
+        <section className="bg-gray-900 rounded-xl p-4">
+          <button
+            onClick={async () => {
+              await fetch('/api/auth/logout', { method: 'POST' })
+              router.push('/login')
+            }}
+            className="w-full bg-gray-800 hover:bg-red-900/40 text-red-400 hover:text-red-300 font-medium rounded-lg py-2.5 text-sm transition-colors border border-gray-700 hover:border-red-800"
+          >
+            Uitloggen
+          </button>
         </section>
       </div>
     </main>

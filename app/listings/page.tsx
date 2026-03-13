@@ -109,16 +109,13 @@ export default function ListingsPage() {
 
               {fotos.length > 0 && (
                 <div className="mt-3">
-                  <div className="flex gap-2 overflow-x-auto pb-1">
-                    {fotos.map((filename) => (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        key={filename}
-                        src={`/products/${slug}/${filename}`}
-                        alt={`${product} foto`}
-                        className="w-16 h-16 rounded-lg object-cover flex-shrink-0"
-                      />
-                    ))}
+                  <div className="flex gap-2">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={`/products/${slug}/${fotos[0]}`}
+                      alt={`${product} foto`}
+                      className="w-16 h-16 rounded-lg object-cover flex-shrink-0"
+                    />
                   </div>
                   <button
                     onClick={() => downloadZip(product)}

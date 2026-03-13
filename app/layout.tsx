@@ -1,6 +1,6 @@
 import type { Metadata, Viewport } from 'next'
 import './globals.css'
-import Navigation from '@/components/Navigation'
+import ConditionalNavigation from '@/components/ConditionalNavigation'
 
 export const metadata: Metadata = {
   title: 'Vinted Dashboard',
@@ -24,7 +24,7 @@ export default function RootLayout({
     <html lang="nl">
       <body className="bg-gray-900 text-white min-h-screen">
         <main className="pb-24 min-h-screen">{children}</main>
-        <Navigation />
+        <ConditionalNavigation />
       </body>
     </html>
   )

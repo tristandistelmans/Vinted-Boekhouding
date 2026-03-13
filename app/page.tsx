@@ -62,16 +62,16 @@ export default function Dashboard() {
           <div className="bg-gray-800 rounded-xl p-4 mb-3">
             {/* Winst verdeling maand */}
             <div className="flex gap-2 mb-4">
-              <div className="flex-1 bg-emerald-900/30 border border-emerald-700/40 rounded-xl p-3 text-center">
-                <p className="text-emerald-400 text-lg font-bold">{formatEuro(stats.geldBinnenDezeMaand)}</p>
+              <div className="flex-1 bg-emerald-900/30 border border-emerald-700/40 rounded-xl p-2.5 text-center min-w-0">
+                <p className="text-emerald-400 text-sm font-bold leading-tight truncate">{formatEuro(stats.geldBinnenDezeMaand)}</p>
                 <p className="text-emerald-700 text-xs mt-0.5">Bevestigd</p>
               </div>
-              <div className="flex-1 bg-yellow-900/20 border border-yellow-700/30 rounded-xl p-3 text-center">
-                <p className="text-yellow-400 text-lg font-bold">{formatEuro(stats.geldVerwachtDezeMaand)}</p>
+              <div className="flex-1 bg-yellow-900/20 border border-yellow-700/30 rounded-xl p-2.5 text-center min-w-0">
+                <p className="text-yellow-400 text-sm font-bold leading-tight truncate">{formatEuro(stats.geldVerwachtDezeMaand)}</p>
                 <p className="text-yellow-700 text-xs mt-0.5">Onderweg</p>
               </div>
-              <div className="flex-1 bg-red-900/20 border border-red-700/30 rounded-xl p-3 text-center">
-                <p className="text-red-400 text-lg font-bold">− {formatEuro(stats.kostenInkopenDezeMaand + stats.extraKostenDezeMaand)}</p>
+              <div className="flex-1 bg-red-900/20 border border-red-700/30 rounded-xl p-2.5 text-center min-w-0">
+                <p className="text-red-400 text-sm font-bold leading-tight truncate">−{formatEuro(stats.kostenInkopenDezeMaand + stats.extraKostenDezeMaand)}</p>
                 <p className="text-red-700 text-xs mt-0.5">Kosten</p>
               </div>
             </div>
@@ -113,17 +113,17 @@ export default function Dashboard() {
           <div className="bg-gray-800 rounded-xl p-4 mb-3">
             {/* Winst verdeling */}
             <div className="flex gap-2 mb-4">
-              <div className="flex-1 bg-emerald-900/30 border border-emerald-700/40 rounded-xl p-3 text-center">
-                <p className="text-emerald-400 text-lg font-bold">{formatEuro(stats.geldBinnen)}</p>
+              <div className="flex-1 bg-emerald-900/30 border border-emerald-700/40 rounded-xl p-2.5 text-center min-w-0">
+                <p className="text-emerald-400 text-sm font-bold leading-tight truncate">{formatEuro(stats.geldBinnen)}</p>
                 <p className="text-emerald-700 text-xs mt-0.5">Bevestigd</p>
               </div>
-              <div className="flex-1 bg-yellow-900/20 border border-yellow-700/30 rounded-xl p-3 text-center">
-                <p className="text-yellow-400 text-lg font-bold">{formatEuro(stats.geldVerwacht)}</p>
+              <div className="flex-1 bg-yellow-900/20 border border-yellow-700/30 rounded-xl p-2.5 text-center min-w-0">
+                <p className="text-yellow-400 text-sm font-bold leading-tight truncate">{formatEuro(stats.geldVerwacht)}</p>
                 <p className="text-yellow-700 text-xs mt-0.5">Onderweg</p>
               </div>
               {(stats.kostenInkopenDitJaar + stats.extraKostenDitJaar) > 0 && (
-                <div className="flex-1 bg-red-900/20 border border-red-700/30 rounded-xl p-3 text-center">
-                  <p className="text-red-400 text-lg font-bold">− {formatEuro(stats.kostenInkopenDitJaar + stats.extraKostenDitJaar)}</p>
+                <div className="flex-1 bg-red-900/20 border border-red-700/30 rounded-xl p-2.5 text-center min-w-0">
+                  <p className="text-red-400 text-sm font-bold leading-tight truncate">−{formatEuro(stats.kostenInkopenDitJaar + stats.extraKostenDitJaar)}</p>
                   <p className="text-red-700 text-xs mt-0.5">Kosten</p>
                 </div>
               )}
