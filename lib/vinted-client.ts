@@ -25,77 +25,6 @@ export interface VintedOrder {
   updated_at: string
 }
 
-export interface VintedAuthResult {
-  token: string
-  userId: number
-}
-
-function parseCookies(cookieHeader: string): Record<string, string> {
-  const cookies: Record<string, string> = {}
-  cookieHeader.split(/,(?=[^ ])/).forEach((part) => {
-    const [nameValue] = part.trim().split(';')
-    const [name, ...valueParts] = nameValue.split('=')
-    if (name) cookies[name.trim()] = valueParts.join('=').trim()
-  })
-  return cookies
-}
-
-function buildCookieString(cookies: Record<string, string>): string {
-  return Object.entries(cookies)
-    .map(([k, v]) => `${k}=${v}`)
-    .join('; ')
-}
-
-export async function authenticate(
-  email: string,
-  password: string
-): Promise<VintedAuthResult> {
-  // Step 1: Fetch homepage to get session cookies + CSRF token
-  const homeResp = await fetch(VINTED_BASE + '/', {
-    headers: DEFAULT_HEADERS,
-    redirect: 'follow',
-  })
-
-  if (!homeResp.ok) {
-    throw new Error(`Kan Vinted niet bereiken (${homeResp.status})`)
-  }
-
-  const rawCookies = homeResp.headers.get('set-cookie') || ''
-  const cookies = parseCookies(rawCookies)
-
-  // Vinted stores CSRF token in cookie named 'CSRF-TOKEN'
-  const csrfToken = cookies['CSRF-TOKEN'] ? decodeURIComponent(cookies['CSRF-TOKEN']) : ''
-  const cookieStr = buildCookieString(cookies)
-
-  // Step 2: Login
-  const loginResp = await fetch(`${VINTED_BASE}/api/v2/sessions`, {
-    method: 'POST',
-    headers: {
-      ...DEFAULT_HEADERS,
-      'Content-Type': 'application/json',
-      'X-Csrf-Token': csrfToken,
-      Cookie: cookieStr,
-    },
-    body: JSON.stringify({ login: email, password, scope: 'all' }),
-  })
-
-  if (!loginResp.ok) {
-    const errText = await loginResp.text().catch(() => '')
-    if (loginResp.status === 401 || loginResp.status === 403) {
-      throw new Error('Inloggen mislukt: controleer je e-mail en wachtwoord')
-    }
-    throw new Error(`Vinted login fout (${loginResp.status}): ${errText.slice(0, 100)}`)
-  }
-
-  const data = await loginResp.json()
-
-  if (!data.access_token || !data.user?.id) {
-    throw new Error('Onverwacht antwoord van Vinted bij inloggen')
-  }
-
-  return { token: data.access_token, userId: data.user.id }
-}
-
 export async function fetchOrders(token: string): Promise<VintedOrder[]> {
   const orders: VintedOrder[] = []
   let page = 1
@@ -112,6 +41,10 @@ export async function fetchOrders(token: string): Promise<VintedOrder[]> {
       }
     )
 
+    if (resp.status === 401) {
+      throw new Error('Token verlopen of ongeldig — vernieuw je token via de Resoled Token Tool')
+    }
+
     if (!resp.ok) {
       throw new Error(`Fout bij ophalen orders (${resp.status})`)
     }
@@ -120,12 +53,9 @@ export async function fetchOrders(token: string): Promise<VintedOrder[]> {
     const batch: VintedOrder[] = data.orders || []
     orders.push(...batch)
 
-    // Stop when we've received all orders or no more pages
     if (batch.length < perPage) break
     page++
-
-    // Safety limit: max 10 pages (1000 orders)
-    if (page > 10) break
+    if (page > 10) break // max 1000 orders
   }
 
   return orders
@@ -153,6 +83,5 @@ export function mapVintedStatus(status: string): string {
   if (s.includes('transit') || s.includes('shipped') || s.includes('delivered')) {
     return 'Onderweg'
   }
-  // sold, packing, label_created, etc.
   return 'Verkocht - Nog niet verzonden'
 }

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getSupabase } from '@/lib/supabase'
-import { authenticate, fetchOrders, mapVintedStatus } from '@/lib/vinted-client'
+import { fetchOrders, mapVintedStatus } from '@/lib/vinted-client'
 import { mapVintedProduct } from '@/lib/constants'
 
 interface SyncResult {
@@ -12,23 +12,21 @@ interface SyncResult {
 export async function POST() {
   const supabase = getSupabase()
 
-  // 1. Laad credentials uit instellingen
+  // 1. Laad token uit instellingen
   const { data: rows, error: settingsError } = await supabase
     .from('instellingen')
     .select('sleutel, waarde')
-    .in('sleutel', ['vinted_email', 'vinted_password'])
+    .eq('sleutel', 'vinted_token')
 
   if (settingsError) {
     return NextResponse.json({ error: 'Kan instellingen niet laden' }, { status: 500 })
   }
 
-  const settings = Object.fromEntries(
-    (rows || []).map((r: { sleutel: string; waarde: string }) => [r.sleutel, r.waarde])
-  )
+  const token = rows?.[0]?.waarde
 
-  if (!settings.vinted_email || !settings.vinted_password) {
+  if (!token) {
     return NextResponse.json(
-      { error: 'Vinted e-mail en wachtwoord zijn nog niet ingesteld' },
+      { error: 'Geen Vinted token ingesteld — plak je token in de instellingen' },
       { status: 400 }
     )
   }
@@ -36,10 +34,6 @@ export async function POST() {
   const result: SyncResult = { nieuw: 0, bijgewerkt: 0, fouten: [] }
 
   try {
-    // 2. Inloggen bij Vinted
-    const { token } = await authenticate(settings.vinted_email, settings.vinted_password)
-
-    // 3. Orders ophalen
     const orders = await fetchOrders(token)
 
     for (const order of orders) {
@@ -53,7 +47,6 @@ export async function POST() {
           ? order.created_at.split('T')[0]
           : new Date().toISOString().split('T')[0]
 
-        // 4. Check of dit order al bestaat
         const { data: existing } = await supabase
           .from('verkopen')
           .select('id, status')
@@ -61,7 +54,6 @@ export async function POST() {
           .maybeSingle()
 
         if (existing) {
-          // Bestaand record: update alleen status als die veranderd is
           if (existing.status !== status) {
             const { error } = await supabase
               .from('verkopen')
@@ -75,7 +67,6 @@ export async function POST() {
             }
           }
         } else {
-          // Nieuw record: insert
           const { error } = await supabase.from('verkopen').insert({
             verkoopdatum,
             product,
@@ -93,13 +84,18 @@ export async function POST() {
           }
         }
       } catch (e) {
-        result.fouten.push(`Order ${order.id}: ${e instanceof Error ? e.message : 'onbekende fout'}`)
+        result.fouten.push(
+          `Order ${order.id}: ${e instanceof Error ? e.message : 'onbekende fout'}`
+        )
       }
     }
 
-    // 5. Sla laatste sync-tijdstip op
     await supabase.from('instellingen').upsert(
-      { sleutel: 'laatste_sync', waarde: new Date().toISOString(), bijgewerkt_op: new Date().toISOString() },
+      {
+        sleutel: 'laatste_sync',
+        waarde: new Date().toISOString(),
+        bijgewerkt_op: new Date().toISOString(),
+      },
       { onConflict: 'sleutel' }
     )
   } catch (e) {
