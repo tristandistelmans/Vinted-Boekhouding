@@ -1,10 +1,13 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
-import { berekenWinst, PRODUCTEN } from '@/lib/constants'
+import { berekenWinst, berekenCommissie, PRODUCTEN, ACTIEVE_STATUSSEN } from '@/lib/constants'
 
-export async function GET() {
+export async function GET(request: NextRequest) {
+  const currentUser = request.cookies.get('user')?.value || 'tristan'
+  const isJasmijn = currentUser === 'jasmijn'
+
   const [
-    { data: verkopen, error: vError },
+    { data: alleVerkopen, error: vError },
     { data: inkopen, error: iError },
     { data: extraKostenData },
   ] = await Promise.all([
@@ -17,15 +20,22 @@ export async function GET() {
     return NextResponse.json({ error: 'Kon stats niet ophalen' }, { status: 500 })
   }
 
+  // Jasmijn ziet alleen haar eigen verkopen; Tristan ziet alles
+  const verkopen = isJasmijn
+    ? (alleVerkopen || []).filter((v) => v.account === '3-jasmijn')
+    : (alleVerkopen || [])
+
   const gemKostByProduct = berekenGemKost(inkopen || [])
 
-  const verkopenMetWinst = (verkopen || []).map((v) => {
+  const verkopenMetWinst = verkopen.map((v) => {
     const aankoopprijs = gemKostByProduct[v.product] ?? 0
-    return {
-      ...v,
-      aankoopprijs,
-      winst: berekenWinst(v.status, v.verkoopprijs, aankoopprijs),
-    }
+    const basisWinst = berekenWinst(v.status, v.verkoopprijs, aankoopprijs)
+    // Voor CEO: Jasmijn's commissie gaat van Tristans winst af
+    const winst =
+      !isJasmijn && v.account === '3-jasmijn' && basisWinst !== null && ACTIEVE_STATUSSEN.includes(v.status)
+        ? basisWinst - berekenCommissie(v.verkoopprijs)
+        : basisWinst
+    return { ...v, aankoopprijs, winst }
   })
 
   const now = new Date()
@@ -43,11 +53,9 @@ export async function GET() {
   const sommeerWinst = (arr: typeof verkopenMetWinst) =>
     arr.reduce((sum, v) => sum + (v.winst ?? 0), 0)
 
-  // Voorraad per product
-  // Als er een 'Beginsaldo' inkoop bestaat voor een product, wordt die gebruikt als
-  // startpunt. Alleen inkopen en verkopen NA de beginsaldo-datum tellen mee.
-  // Dit zorgt dat de historische data-onnauwkeurigheden de huidige voorraad niet beïnvloeden.
+  // Voorraad per product — altijd globaal (gedeeld)
   const inkopenArr = inkopen || []
+  const alleVerkopenArr = alleVerkopen || []
   const voorraad = PRODUCTEN.map((product) => {
     const beginsaldoEntries = inkopenArr
       .filter((i) => i.product === product && i.status === 'Beginsaldo')
@@ -64,7 +72,7 @@ export async function GET() {
       const onderweg = inkopenArr
         .filter((i) => i.product === product && i.status === 'Onderweg' && i.besteldatum > snapDatum)
         .reduce((s: number, i: { aantal: number }) => s + i.aantal, 0)
-      const nieuweVerkopen = verkopenMetWinst.filter(
+      const nieuweVerkopen = alleVerkopenArr.filter(
         (v) => v.product === product && v.status !== 'Retour ontvangen' && v.verkoopdatum > snapDatum
       ).length
       return {
@@ -74,14 +82,13 @@ export async function GET() {
       }
     }
 
-    // Fallback: oude berekening (als er geen beginsaldo is)
     const ingekocht = inkopenArr
       .filter((i) => i.product === product && i.status === 'In Huis')
       .reduce((s: number, i: { aantal: number }) => s + i.aantal, 0)
     const onderweg = inkopenArr
       .filter((i) => i.product === product && i.status === 'Onderweg')
       .reduce((s: number, i: { aantal: number }) => s + i.aantal, 0)
-    const verkocht = verkopenMetWinst.filter(
+    const verkocht = alleVerkopenArr.filter(
       (v) => v.product === product && v.status !== 'Retour ontvangen'
     ).length
     return {
@@ -94,30 +101,30 @@ export async function GET() {
   // Winst per maand (dit jaar)
   const maandnamen = ['Jan', 'Feb', 'Mrt', 'Apr', 'Mei', 'Jun', 'Jul', 'Aug', 'Sep', 'Okt', 'Nov', 'Dec']
   const winstPerMaand = maandnamen.map((naam, i) => {
-    const verkopen = verkopenDitJaar.filter((v) => new Date(v.verkoopdatum).getMonth() === i)
-    return { naam, winst: sommeerWinst(verkopen) }
+    const vk = verkopenDitJaar.filter((v) => new Date(v.verkoopdatum).getMonth() === i)
+    return { naam, winst: sommeerWinst(vk) }
   })
 
-  // Winst per product (dit jaar) + gemiddelde verkoopprijs
+  // Winst per product (dit jaar)
   const winstPerProduct = PRODUCTEN.map((product) => {
-    const verkopen = verkopenDitJaar.filter((v) => v.product === product)
-    const afgerond = verkopen.filter((v) =>
+    const vk = verkopenDitJaar.filter((v) => v.product === product)
+    const afgerond = vk.filter((v) =>
       v.status === 'Afgerond (geld binnen)' || v.status === 'Verkocht - Nog niet verzonden' || v.status === 'Onderweg'
     )
     const gemVerkoopprijs = afgerond.length > 0
       ? afgerond.reduce((s, v) => s + v.verkoopprijs, 0) / afgerond.length
       : 0
-    return { product, winst: sommeerWinst(verkopen), aantal: verkopen.length, gemVerkoopprijs }
+    return { product, winst: sommeerWinst(vk), aantal: vk.length, gemVerkoopprijs }
   }).sort((a, b) => b.winst - a.winst)
 
-  // Totale waarde in voorraad (in_huis × gemiddelde aankoopprijs)
+  // Totale waarde in voorraad
   const totaleVoorraadWaarde = voorraad.reduce((sum, item) => {
     const gemKost = gemKostByProduct[item.product] ?? 0
     return sum + item.in_huis * gemKost
   }, 0)
 
   // Winst per account (dit jaar)
-  const accounts = [...new Set((verkopen || []).map((v) => v.account))].sort()
+  const accounts = [...new Set((alleVerkopen || []).map((v) => v.account))].sort()
   const winstPerAccount = accounts.map((account) => {
     const v = verkopenDitJaar.filter((v) => v.account === account)
     return { account, winst: sommeerWinst(v), aantal: v.length }
@@ -129,7 +136,11 @@ export async function GET() {
   const omzetDitJaar = actieveVerkopen.reduce((s, v) => s + v.verkoopprijs, 0)
   const kostenProductDitJaar = actieveVerkopen.reduce((s, v) => s + v.aankoopprijs, 0)
 
-  // Kosten op basis van inkoopdatum (niet verkoopdatum)
+  // Commissies betaald aan Jasmijn (actieve Jasmijn verkopen)
+  const commissiesDitJaar = actieveVerkopen
+    .filter((v) => v.account === '3-jasmijn')
+    .reduce((s, v) => s + berekenCommissie(v.verkoopprijs), 0)
+
   const kostenInkopenDitJaar = inkopenArr
     .filter((i: { besteldatum: string; status: string; totale_aankoopprijs: number }) =>
       new Date(i.besteldatum).getFullYear() === ditJaar && i.status !== 'Beginsaldo'
@@ -147,20 +158,20 @@ export async function GET() {
     .filter((e: { datum: string }) => new Date(e.datum).getFullYear() === ditJaar)
     .reduce((s: number, e: { bedrag: number }) => s + e.bedrag, 0)
 
-  // geldBinnen = winst van afgeronde verkopen
   const geldBinnen = verkopenDitJaar
     .filter((v) => v.status === 'Afgerond (geld binnen)')
     .reduce((s, v) => s + (v.winst ?? 0), 0)
 
-  // geldVerwacht = totale OMZET van nog te verzenden / onderweg items
   const geldVerwacht = verkopenDitJaar
     .filter((v) => v.status === 'Verkocht - Nog niet verzonden' || v.status === 'Onderweg')
     .reduce((s, v) => s + v.verkoopprijs, 0)
 
-  // Maand breakdowns
   const actieveVerkopenDezeMaand = verkopenDezeMaand.filter((v) => actieveStatussen.includes(v.status))
   const omzetDezeMaand = actieveVerkopenDezeMaand.reduce((s, v) => s + v.verkoopprijs, 0)
   const kostenProductDezeMaand = actieveVerkopenDezeMaand.reduce((s, v) => s + v.aankoopprijs, 0)
+  const commissiesDezeMaand = actieveVerkopenDezeMaand
+    .filter((v) => v.account === '3-jasmijn')
+    .reduce((s, v) => s + berekenCommissie(v.verkoopprijs), 0)
   const extraKostenDezeMaand = (extraKostenData || [])
     .filter((e: { datum: string }) => {
       const d = new Date(e.datum)
@@ -172,7 +183,6 @@ export async function GET() {
     .filter((v) => v.status === 'Afgerond (geld binnen)')
     .reduce((s, v) => s + (v.winst ?? 0), 0)
 
-  // geldVerwachtDezeMaand = totale OMZET van nog te verzenden / onderweg items deze maand
   const geldVerwachtDezeMaand = verkopenDezeMaand
     .filter((v) => v.status === 'Verkocht - Nog niet verzonden' || v.status === 'Onderweg')
     .reduce((s, v) => s + v.verkoopprijs, 0)
@@ -193,8 +203,121 @@ export async function GET() {
     })
     .filter((a) => a.aantal > 0)
 
-  // Te verzenden: actief openstaand (alle tijden)
-  const teVerzenden = (verkopen || []).filter((v) => v.status === 'Verkocht - Nog niet verzonden').length
+  // Te verzenden: voor Jasmijn alleen haar eigen, voor CEO alle
+  const teVerzenden = (isJasmijn ? verkopen : (alleVerkopen || [])).filter(
+    (v) => v.status === 'Verkocht - Nog niet verzonden'
+  ).length
+
+  // === Jasmijn-specifieke commissiedata ===
+  let jasmijnStats = undefined
+  if (isJasmijn) {
+    // Omzet binnen (afgeronde verkopen — alle tijden)
+    const afgerondAlleT = verkopenMetWinst.filter((v) => v.status === 'Afgerond (geld binnen)')
+    const omzetBinnenAlleT = afgerondAlleT.reduce((s, v) => s + v.verkoopprijs, 0)
+    const commissieAlleT = afgerondAlleT.reduce((s, v) => s + berekenCommissie(v.verkoopprijs), 0)
+
+    // Commissie dit jaar
+    const actieveJaar = verkopenDitJaar.filter((v) => actieveStatussen.includes(v.status))
+    const commissieDitJaar = actieveJaar.reduce((s, v) => s + berekenCommissie(v.verkoopprijs), 0)
+
+    // Commissie deze maand
+    const actiefMaand = verkopenDezeMaand.filter((v) => actieveStatussen.includes(v.status))
+    const commissieDezeMaand = actiefMaand.reduce((s, v) => s + berekenCommissie(v.verkoopprijs), 0)
+
+    // Omzet dit jaar / deze maand (voor KPI's)
+    const omzetBinnenDitJaar = verkopenDitJaar
+      .filter((v) => v.status === 'Afgerond (geld binnen)')
+      .reduce((s, v) => s + v.verkoopprijs, 0)
+    const omzetBinnenDezeMaand = verkopenDezeMaand
+      .filter((v) => v.status === 'Afgerond (geld binnen)')
+      .reduce((s, v) => s + v.verkoopprijs, 0)
+
+    // Commissie op afgeronde verkopen dit jaar / deze maand
+    const commissieBinnenDitJaar = verkopenDitJaar
+      .filter((v) => v.status === 'Afgerond (geld binnen)')
+      .reduce((s, v) => s + berekenCommissie(v.verkoopprijs), 0)
+    const commissieBinnenDezeMaand = verkopenDezeMaand
+      .filter((v) => v.status === 'Afgerond (geld binnen)')
+      .reduce((s, v) => s + berekenCommissie(v.verkoopprijs), 0)
+
+    // Te betalen = som van (verkoopprijs - commissie) voor afgeronde, nog niet uitbetaalde verkopen
+    const afgerondNietUitbetaald = verkopenMetWinst.filter(
+      (v) => v.status === 'Afgerond (geld binnen)' && !v.uitbetaald
+    )
+    const teBetalen = afgerondNietUitbetaald.reduce(
+      (s, v) => s + v.verkoopprijs - berekenCommissie(v.verkoopprijs),
+      0
+    )
+    const teBetalenVerkopen = afgerondNietUitbetaald.map((v) => ({
+      id: v.id,
+      product: v.product,
+      verkoopdatum: v.verkoopdatum,
+      verkoopprijs: v.verkoopprijs,
+      commissie: berekenCommissie(v.verkoopprijs),
+      teStorten: v.verkoopprijs - berekenCommissie(v.verkoopprijs),
+    }))
+
+    // Omzet onderweg (verwacht) deze maand / dit jaar
+    const omzetOnderweg = verkopenDitJaar
+      .filter((v) => v.status === 'Verkocht - Nog niet verzonden' || v.status === 'Onderweg')
+      .reduce((s, v) => s + v.verkoopprijs, 0)
+    const omzetOnderwegDezeMaand = verkopenDezeMaand
+      .filter((v) => v.status === 'Verkocht - Nog niet verzonden' || v.status === 'Onderweg')
+      .reduce((s, v) => s + v.verkoopprijs, 0)
+
+    // Omzet per maand (voor grafiek)
+    const omzetPerMaand = maandnamen.map((naam, i) => {
+      const vk = verkopenDitJaar.filter(
+        (v) => new Date(v.verkoopdatum).getMonth() === i && actieveStatussen.includes(v.status)
+      )
+      return { naam, omzet: vk.reduce((s, v) => s + v.verkoopprijs, 0) }
+    })
+
+    // Omzet per product (dit jaar, voor grafiek)
+    const omzetPerProduct = PRODUCTEN.map((product) => {
+      const vk = verkopenDitJaar.filter(
+        (v) => v.product === product && actieveStatussen.includes(v.status)
+      )
+      return { product, omzet: vk.reduce((s, v) => s + v.verkoopprijs, 0), aantal: vk.length }
+    }).sort((a, b) => b.omzet - a.omzet)
+
+    // Omzet per product deze maand
+    const omzetPerProductDezeMaand = PRODUCTEN.map((product) => {
+      const vk = verkopenDezeMaand.filter(
+        (v) => v.product === product && actieveStatussen.includes(v.status)
+      )
+      return { product, omzet: vk.reduce((s, v) => s + v.verkoopprijs, 0), aantal: vk.length }
+    }).sort((a, b) => b.omzet - a.omzet)
+
+    jasmijnStats = {
+      commissieDitJaar,
+      commissieDezeMaand,
+      commissieBinnenDitJaar,
+      commissieBinnenDezeMaand,
+      omzetBinnenDitJaar,
+      omzetBinnenDezeMaand,
+      omzetOnderweg,
+      omzetOnderwegDezeMaand,
+      teBetalen,
+      teBetalenVerkopen,
+      omzetPerMaand,
+      omzetPerProduct,
+      omzetPerProductDezeMaand,
+    }
+  }
+
+  // Voor CEO: hoeveel moet Jasmijn nog storten?
+  let jasmijnOpenstaand: number | undefined = undefined
+  if (!isJasmijn) {
+    const jasmijnAfgerondNietUitbetaald = (alleVerkopen || []).filter(
+      (v) => v.account === '3-jasmijn' && v.status === 'Afgerond (geld binnen)' && !v.uitbetaald
+    )
+    jasmijnOpenstaand = jasmijnAfgerondNietUitbetaald.reduce(
+      (s: number, v: { verkoopprijs: number }) =>
+        s + v.verkoopprijs - berekenCommissie(v.verkoopprijs),
+      0
+    )
+  }
 
   return NextResponse.json({
     winstDitJaar: sommeerWinst(verkopenDitJaar),
@@ -204,6 +327,7 @@ export async function GET() {
     totaleVoorraadWaarde,
     omzetDitJaar,
     kostenProductDitJaar,
+    commissiesDitJaar,
     extraKostenDitJaar,
     geldBinnen,
     geldVerwacht,
@@ -211,6 +335,7 @@ export async function GET() {
     kostenInkopenDezeMaand,
     omzetDezeMaand,
     kostenProductDezeMaand,
+    commissiesDezeMaand,
     extraKostenDezeMaand,
     geldBinnenDezeMaand,
     geldVerwachtDezeMaand,
@@ -221,6 +346,8 @@ export async function GET() {
     winstPerMaand,
     winstPerProduct,
     winstPerAccount,
+    jasmijnStats,
+    jasmijnOpenstaand,
   })
 }
 

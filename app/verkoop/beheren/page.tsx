@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react'
 import Image from 'next/image'
-import { PRODUCTEN, STATUSSEN, formatEuro, formatDatum } from '@/lib/constants'
+import { PRODUCTEN, STATUSSEN, formatEuro, formatDatum, berekenCommissie } from '@/lib/constants'
 
 type Verkoop = {
   id: string
@@ -15,6 +15,7 @@ type Verkoop = {
   winst: number | null
   aankoopprijs: number
   notitie?: string | null
+  uitbetaald?: boolean
 }
 
 const ACTIEVE_STATUSSEN = ['Verkocht - Nog niet verzonden', 'Onderweg', 'Retour', 'Probleem']
@@ -74,6 +75,7 @@ function ProductAfbeelding({ product }: { product: string }) {
 
 export default function VerkopBeheren() {
   const [verkopen, setVerkopen] = useState<Verkoop[]>([])
+  const [isCEO, setIsCEO] = useState(true)
   const [laden, setLaden] = useState(true)
   const [fout, setFout] = useState('')
   const [filterStatus, setFilterStatus] = useState('alle')
@@ -85,6 +87,7 @@ export default function VerkopBeheren() {
   const [bezig, setBezig] = useState(false)
   const [prijsEdit, setPrijsEdit] = useState<{ id: string; waarde: string } | null>(null)
   const [notitieEdit, setNotitieEdit] = useState<{ id: string; waarde: string } | null>(null)
+  const [uitbetaaldBezig, setUitbetaaldBezig] = useState<string | null>(null)
 
   const laadVerkopen = useCallback(async () => {
     setLaden(true)
@@ -100,7 +103,10 @@ export default function VerkopBeheren() {
     }
   }, [])
 
-  useEffect(() => { laadVerkopen() }, [laadVerkopen])
+  useEffect(() => {
+    laadVerkopen()
+    fetch('/api/auth/me').then((r) => r.json()).then((d) => setIsCEO(d.isCEO))
+  }, [laadVerkopen])
 
   async function updateStatus(id: string, status: string) {
     setStatusBezig(id)
@@ -142,6 +148,40 @@ export default function VerkopBeheren() {
       setBezig(false)
       setPrijsEdit(null)
     }
+  }
+
+  async function toggleUitbetaald(id: string, huidig: boolean) {
+    setUitbetaaldBezig(id)
+    try {
+      const res = await fetch(`/api/verkopen/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ uitbetaald: !huidig }),
+      })
+      if (res.ok) setVerkopen((prev) => prev.map((v) => v.id === id ? { ...v, uitbetaald: !huidig } : v))
+    } finally {
+      setUitbetaaldBezig(null)
+    }
+  }
+
+  async function markeerAllesUitbetaald(account: string) {
+    const teMarkeren = gefilterd.filter(
+      (v) => v.account === account && v.status === 'Afgerond (geld binnen)' && !v.uitbetaald
+    )
+    for (const v of teMarkeren) {
+      await fetch(`/api/verkopen/${v.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ uitbetaald: true }),
+      })
+    }
+    setVerkopen((prev) =>
+      prev.map((v) =>
+        v.account === account && v.status === 'Afgerond (geld binnen)' && !v.uitbetaald
+          ? { ...v, uitbetaald: true }
+          : v
+      )
+    )
   }
 
   async function verwijder(id: string) {
@@ -291,7 +331,29 @@ export default function VerkopBeheren() {
           <div key={account} className="flex-1 min-w-0">
             {/* Account header */}
             <div className="px-3 py-2 bg-gray-800/60 border-b border-gray-800">
-              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">{account}</p>
+              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">
+                {isCEO ? account : 'Mijn verkopen'}
+              </p>
+              {isCEO && account === '3-jasmijn' && (() => {
+                const openstaand = gefilterd.filter(
+                  (v) => v.account === '3-jasmijn' && v.status === 'Afgerond (geld binnen)' && !v.uitbetaald
+                )
+                if (openstaand.length === 0) return null
+                const totaal = openstaand.reduce((s, v) => s + v.verkoopprijs - berekenCommissie(v.verkoopprijs), 0)
+                return (
+                  <div className="flex items-center justify-between">
+                    <span className="text-orange-400 text-xs font-semibold">
+                      {formatEuro(totaal)} open
+                    </span>
+                    <button
+                      onClick={() => markeerAllesUitbetaald('3-jasmijn')}
+                      className="text-xs text-emerald-400 bg-emerald-900/30 px-2 py-0.5 rounded-full"
+                    >
+                      Alles betaald ✓
+                    </button>
+                  </div>
+                )
+              })()}
             </div>
 
             {rijen(account).map((v) => (
@@ -326,9 +388,22 @@ export default function VerkopBeheren() {
                           {formatEuro(v.verkoopprijs)}
                         </button>
                       )}
-                      <span className={`text-xs font-medium ${v.winst === null ? 'text-gray-600' : v.winst >= 0 ? 'text-emerald-500' : 'text-red-400'}`}>
-                        {v.winst === null ? '—' : `${v.winst >= 0 ? '+' : ''}${formatEuro(v.winst)}`}
-                      </span>
+                      {isCEO ? (
+                        <>
+                          <span className={`text-xs font-medium ${v.winst === null ? 'text-gray-600' : v.winst >= 0 ? 'text-emerald-500' : 'text-red-400'}`}>
+                            {v.winst === null ? '—' : `${v.winst >= 0 ? '+' : ''}${formatEuro(v.winst)}`}
+                          </span>
+                          {v.account === '3-jasmijn' && berekenCommissie(v.verkoopprijs) > 0 && (
+                            <span className="text-xs text-blue-500">
+                              −{formatEuro(berekenCommissie(v.verkoopprijs))} comm.
+                            </span>
+                          )}
+                        </>
+                      ) : (
+                        <span className="text-xs font-medium text-blue-400">
+                          commissie {formatEuro(berekenCommissie(v.verkoopprijs))}
+                        </span>
+                      )}
                     </div>
 
                     {/* Koper · datum */}
@@ -338,7 +413,7 @@ export default function VerkopBeheren() {
                   </div>
                 </div>
 
-                {/* Status dropdown + delete */}
+                {/* Status dropdown + uitbetaald toggle + delete */}
                 <div className="flex items-center gap-1.5 pl-[46px]">
                   <select
                     value={v.status}
@@ -348,6 +423,16 @@ export default function VerkopBeheren() {
                   >
                     {STATUSSEN.map((s) => <option key={s} value={s}>{statusKort(s)}</option>)}
                   </select>
+                  {isCEO && v.account === '3-jasmijn' && v.status === 'Afgerond (geld binnen)' && (
+                    <button
+                      onClick={() => toggleUitbetaald(v.id, v.uitbetaald ?? false)}
+                      disabled={uitbetaaldBezig === v.id}
+                      title={v.uitbetaald ? 'Markeer als niet betaald' : 'Markeer als betaald'}
+                      className={`p-2 rounded-xl border shrink-0 text-sm leading-none ${v.uitbetaald ? 'bg-emerald-900/30 border-emerald-700/50 text-emerald-400' : 'bg-gray-800 border-gray-700 text-gray-600'}`}
+                    >
+                      ✓
+                    </button>
+                  )}
                   <button
                     onClick={() => setVerwijderBevestig(v.id)}
                     className="p-2 rounded-xl bg-gray-800 border border-gray-700 text-gray-500 active:text-red-400 shrink-0"

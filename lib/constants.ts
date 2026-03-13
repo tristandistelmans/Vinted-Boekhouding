@@ -28,7 +28,9 @@ export const STATUSSEN = [
   'Probleem',
 ] as const
 
-export const ACCOUNTS = ['1-jesuslata', '2-disteltr'] as const
+export const ACCOUNTS = ['1-jesuslata', '2-disteltr', '3-jasmijn'] as const
+
+export const CEO_ACCOUNTS = ['1-jesuslata', '2-disteltr', '3-jasmijn'] as const
 
 export const ACTIEVE_STATUSSEN = [
   'Afgerond (geld binnen)',
@@ -122,6 +124,16 @@ export function mapVintedProduct(title: string): string {
     }
   }
   return 'Onbekend'
+}
+
+export function berekenCommissie(verkoopprijs: number): number {
+  if (verkoopprijs >= 35) {
+    return 5 + Math.floor((verkoopprijs - 35) / 5) * 2.5
+  }
+  if (verkoopprijs >= 30) {
+    return 3
+  }
+  return 0
 }
 
 export function berekenWinst(

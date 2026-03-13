@@ -1,8 +1,11 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
-import { berekenWinst } from '@/lib/constants'
+import { berekenWinst, berekenCommissie, ACTIEVE_STATUSSEN } from '@/lib/constants'
 
-export async function GET() {
+export async function GET(request: NextRequest) {
+  const currentUser = request.cookies.get('user')?.value || 'tristan'
+  const isJasmijn = currentUser === 'jasmijn'
+
   const [{ data: verkopen, error: verkoopError }, { data: inkopen, error: inkoopError }] =
     await Promise.all([
       supabase.from('verkopen').select('*').order('verkoopdatum', { ascending: false }),
@@ -15,18 +18,33 @@ export async function GET() {
 
   const gemKostByProduct = berekenGemKost(inkopen || [])
 
-  const verkopenMetWinst = (verkopen || []).map((v) => {
+  const gefilterd = isJasmijn
+    ? (verkopen || []).filter((v) => v.account === '3-jasmijn')
+    : (verkopen || [])
+
+  const verkopenMetWinst = gefilterd.map((v) => {
     const aankoopprijs = gemKostByProduct[v.product] ?? 0
-    const winst = berekenWinst(v.status, v.verkoopprijs, aankoopprijs)
+    const basisWinst = berekenWinst(v.status, v.verkoopprijs, aankoopprijs)
+    // Voor CEO: Jasmijn's commissie wordt afgetrokken van de winst
+    const winst =
+      !isJasmijn && v.account === '3-jasmijn' && basisWinst !== null && ACTIEVE_STATUSSEN.includes(v.status)
+        ? basisWinst - berekenCommissie(v.verkoopprijs)
+        : basisWinst
     return { ...v, aankoopprijs, winst }
   })
 
   return NextResponse.json(verkopenMetWinst)
 }
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
+  const currentUser = request.cookies.get('user')?.value || 'tristan'
+  const isJasmijn = currentUser === 'jasmijn'
+
   const body = await request.json()
-  const { verkoopdatum, product, naam_koper, verkoopprijs, status, account, notitie } = body
+  const { verkoopdatum, product, naam_koper, verkoopprijs, status, notitie } = body
+
+  // Jasmijn krijgt altijd haar eigen account; CEO kiest zelf
+  const account = isJasmijn ? '3-jasmijn' : body.account
 
   if (!verkoopdatum || !product || !naam_koper || !verkoopprijs || !status || !account) {
     return NextResponse.json({ error: 'Alle velden zijn verplicht' }, { status: 400 })

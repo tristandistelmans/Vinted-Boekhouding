@@ -1,10 +1,11 @@
 'use client'
 
-import { useState } from 'react'
-import { PRODUCTEN, STATUSSEN, ACCOUNTS } from '@/lib/constants'
+import { useEffect, useState } from 'react'
+import { PRODUCTEN, STATUSSEN, CEO_ACCOUNTS } from '@/lib/constants'
 
 export default function VerkopInvoeren() {
   const vandaag = new Date().toISOString().split('T')[0]
+  const [isCEO, setIsCEO] = useState<boolean | null>(null)
 
   const [form, setForm] = useState({
     verkoopdatum: vandaag,
@@ -12,11 +13,17 @@ export default function VerkopInvoeren() {
     naam_koper: '',
     verkoopprijs: '50',
     status: 'Verkocht - Nog niet verzonden',
-    account: ACCOUNTS[0],
+    account: CEO_ACCOUNTS[0],
     notitie: '',
   })
   const [bezig, setBezig] = useState(false)
   const [bericht, setBericht] = useState<{ type: 'succes' | 'fout'; tekst: string } | null>(null)
+
+  useEffect(() => {
+    fetch('/api/auth/me')
+      .then((r) => r.json())
+      .then((data) => setIsCEO(data.isCEO))
+  }, [])
 
   function updateForm(key: string, value: string) {
     setForm((prev) => ({ ...prev, [key]: value }))
@@ -28,11 +35,14 @@ export default function VerkopInvoeren() {
     setBezig(true)
     setBericht(null)
 
+    // Voor Jasmijn: account wordt server-side ingesteld; stuur gewoon mee
+    const body = isCEO ? form : { ...form, account: '3-jasmijn' }
+
     try {
       const res = await fetch('/api/verkopen', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(form),
+        body: JSON.stringify(body),
       })
       const data = await res.json()
 
@@ -46,7 +56,7 @@ export default function VerkopInvoeren() {
           naam_koper: '',
           verkoopprijs: '50',
           status: 'Verkocht - Nog niet verzonden',
-          account: ACCOUNTS[0],
+          account: CEO_ACCOUNTS[0],
           notitie: '',
         })
       }
@@ -141,20 +151,23 @@ export default function VerkopInvoeren() {
           </select>
         </Veld>
 
-        <Veld label="Account">
-          <select
-            value={form.account}
-            onChange={(e) => updateForm('account', e.target.value)}
-            className="veld-input"
-            required
-          >
-            {ACCOUNTS.map((a) => (
-              <option key={a} value={a}>
-                {a}
-              </option>
-            ))}
-          </select>
-        </Veld>
+        {/* Account dropdown alleen voor CEO */}
+        {isCEO && (
+          <Veld label="Account">
+            <select
+              value={form.account}
+              onChange={(e) => updateForm('account', e.target.value)}
+              className="veld-input"
+              required
+            >
+              {CEO_ACCOUNTS.map((a) => (
+                <option key={a} value={a}>
+                  {a}
+                </option>
+              ))}
+            </select>
+          </Veld>
+        )}
 
         <Veld label="Notitie (optioneel)">
           <textarea
