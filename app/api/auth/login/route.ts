@@ -19,7 +19,9 @@ export async function POST(req: NextRequest) {
   const { username, password } = await req.json()
 
   const match = USERS.find(
-    (u) => u.username && u.password && username === u.username && password === u.password
+    (u) => u.username && u.password &&
+      username.toLowerCase() === u.username.toLowerCase() &&
+      password.toLowerCase() === u.password.toLowerCase()
   )
 
   if (!match) {
