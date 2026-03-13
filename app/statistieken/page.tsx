@@ -395,6 +395,18 @@ function JasmijnStatistieken({
   huidigJaar: number
 }) {
   const [tab, setTab] = useState<'maand' | 'jaar'>('maand')
+  const [storting, setStorting] = useState<'idle' | 'laden' | 'klaar'>('idle')
+
+  async function markeerGestort() {
+    setStorting('laden')
+    const res = await fetch('/api/uitbetaald', { method: 'POST' })
+    if (res.ok) {
+      setStorting('klaar')
+      setTimeout(() => window.location.reload(), 1000)
+    } else {
+      setStorting('idle')
+    }
+  }
   const maandnamen = ['januari','februari','maart','april','mei','juni','juli','augustus','september','oktober','november','december']
   const huidigeMaand = maandnamen[new Date().getMonth()]
 
@@ -405,6 +417,23 @@ function JasmijnStatistieken({
   return (
     <div className="px-4 pt-6 pb-4">
       <h1 className="text-2xl font-bold text-white mb-3">Statistieken</h1>
+
+      {/* Te storten aan Tristan */}
+      {jasmijn.teBetalen > 0 && (
+        <div className="bg-orange-900/30 border border-orange-700/50 rounded-xl p-4 mb-4 flex items-center justify-between gap-3">
+          <div>
+            <p className="text-orange-300 text-xs font-medium mb-0.5">Te storten aan Tristan</p>
+            <p className="text-white text-xl font-bold">{formatEuro(jasmijn.teBetalen)}</p>
+          </div>
+          <button
+            onClick={markeerGestort}
+            disabled={storting !== 'idle'}
+            className="bg-orange-600 hover:bg-orange-500 disabled:opacity-60 text-white text-sm font-semibold px-4 py-2 rounded-xl transition-colors shrink-0"
+          >
+            {storting === 'laden' ? '...' : storting === 'klaar' ? 'Gestort ✓' : 'Gestort'}
+          </button>
+        </div>
+      )}
 
       {/* Tab toggle */}
       <div className="flex gap-2 mb-5">
