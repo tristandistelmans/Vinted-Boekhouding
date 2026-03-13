@@ -14,6 +14,19 @@ import {
   Line,
 } from 'recharts'
 
+type JasmijnStats = {
+  commissieDitJaar: number
+  commissieDezeMaand: number
+  omzetBinnenDitJaar: number
+  omzetBinnenDezeMaand: number
+  omzetOnderweg: number
+  omzetOnderwegDezeMaand: number
+  teBetalen: number
+  omzetPerMaand: { naam: string; omzet: number }[]
+  omzetPerProduct: { product: string; omzet: number; aantal: number }[]
+  omzetPerProductDezeMaand: { product: string; omzet: number; aantal: number }[]
+}
+
 type Stats = {
   winstDitJaar: number
   winstDezeMaand: number
@@ -30,6 +43,7 @@ type Stats = {
   winstPerMaand: { naam: string; winst: number }[]
   winstPerProduct: { product: string; winst: number; aantal: number; gemVerkoopprijs: number }[]
   winstPerAccount: { account: string; winst: number; aantal: number }[]
+  jasmijnStats?: JasmijnStats
 }
 
 const STATS_2025 = {
@@ -58,16 +72,20 @@ const STATS_2025 = {
 
 export default function StatistiekenPage() {
   const [stats, setStats] = useState<Stats | null>(null)
+  const [isJasmijn, setIsJasmijn] = useState(false)
   const [laden, setLaden] = useState(true)
   const [fout, setFout] = useState('')
   const [jaar, setJaar] = useState<2025 | 2026>(2026)
 
   useEffect(() => {
-    fetch('/api/stats')
-      .then((r) => r.json())
-      .then((data) => {
-        if (data.error) setFout(data.error)
-        else setStats(data)
+    Promise.all([
+      fetch('/api/stats').then((r) => r.json().catch(() => ({ error: `HTTP ${r.status}` }))),
+      fetch('/api/auth/me').then((r) => r.json()),
+    ])
+      .then(([statsData, userData]) => {
+        if (statsData.error) setFout(statsData.error)
+        else setStats(statsData)
+        setIsJasmijn(userData.isCEO === false)
       })
       .catch(() => setFout('Kon statistieken niet laden'))
       .finally(() => setLaden(false))
@@ -82,6 +100,11 @@ export default function StatistiekenPage() {
     </div>
   )
   if (!stats) return null
+
+  // Jasmijn krijgt eigen weergave
+  if (isJasmijn && stats.jasmijnStats) {
+    return <JasmijnStatistieken stats={stats} jasmijn={stats.jasmijnStats} huidigJaar={huidigJaar} />
+  }
 
   const maandData = stats.winstPerMaand.filter((m) => m.winst !== 0)
   const topProducten = stats.winstPerProduct.slice(0, 8)
@@ -210,7 +233,6 @@ export default function StatistiekenPage() {
           {/* DIT JAAR */}
           <p className="text-xs font-semibold text-gray-500 uppercase tracking-widest mb-2">{new Date().getFullYear()}</p>
 
-          {/* Winst per maand 2026 */}
           <div className="bg-gray-800 rounded-xl p-4 mb-4">
             <h2 className="text-white font-semibold mb-4">Winst per maand</h2>
             {maandData.length > 0 ? (
@@ -224,13 +246,7 @@ export default function StatistiekenPage() {
                     labelStyle={{ color: '#f9fafb' }}
                     formatter={(value) => [formatEuro(Number(value)), 'Winst']}
                   />
-                  <Line
-                    type="monotone"
-                    dataKey="winst"
-                    stroke="#34d399"
-                    strokeWidth={2}
-                    dot={{ fill: '#34d399', r: 3 }}
-                  />
+                  <Line type="monotone" dataKey="winst" stroke="#34d399" strokeWidth={2} dot={{ fill: '#34d399', r: 3 }} />
                 </LineChart>
               </ResponsiveContainer>
             ) : (
@@ -238,24 +254,14 @@ export default function StatistiekenPage() {
             )}
           </div>
 
-          {/* Winst per product 2026 */}
           <div className="bg-gray-800 rounded-xl p-4 mb-4">
             <h2 className="text-white font-semibold mb-4">Winst per product</h2>
             {topProducten.some((p) => p.winst !== 0) ? (
               <ResponsiveContainer width="100%" height={220}>
-                <BarChart
-                  data={topProducten}
-                  layout="vertical"
-                  margin={{ top: 0, right: 10, left: 60, bottom: 0 }}
-                >
+                <BarChart data={topProducten} layout="vertical" margin={{ top: 0, right: 10, left: 60, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#374151" horizontal={false} />
                   <XAxis type="number" tick={{ fill: '#9ca3af', fontSize: 11 }} tickFormatter={(v) => `€${v}`} />
-                  <YAxis
-                    type="category"
-                    dataKey="product"
-                    tick={{ fill: '#d1d5db', fontSize: 11 }}
-                    width={60}
-                  />
+                  <YAxis type="category" dataKey="product" tick={{ fill: '#d1d5db', fontSize: 11 }} width={60} />
                   <Tooltip
                     contentStyle={{ background: '#1f2937', border: '1px solid #374151', borderRadius: '8px' }}
                     labelStyle={{ color: '#f9fafb' }}
@@ -272,7 +278,7 @@ export default function StatistiekenPage() {
           {/* Per account 2026 */}
           {stats.winstPerAccount.length > 0 && (
             <div className="bg-gray-800 rounded-xl p-4 mb-4">
-              <h2 className="text-white font-semibold mb-3">Per account 2026</h2>
+              <h2 className="text-white font-semibold mb-3">Per account {huidigJaar}</h2>
               <div className="space-y-2">
                 {stats.winstPerAccount.map((a) => (
                   <div key={a.account} className="flex items-center gap-1 py-1">
@@ -292,7 +298,7 @@ export default function StatistiekenPage() {
 
           {/* Bestsellers 2026 */}
           <div className="bg-gray-800 rounded-xl p-4">
-            <h2 className="text-white font-semibold mb-3">Bestsellers 2026</h2>
+            <h2 className="text-white font-semibold mb-3">Bestsellers {huidigJaar}</h2>
             <div className="grid grid-cols-4 gap-1 px-1 mb-2">
               <span className="text-gray-500 text-xs col-span-2">Product</span>
               <span className="text-gray-500 text-xs text-right">Gem. prijs</span>
@@ -336,23 +342,13 @@ export default function StatistiekenPage() {
             </div>
           </div>
 
-          {/* Winst per product 2025 */}
           <div className="bg-gray-800 rounded-xl p-4 mb-4">
             <h2 className="text-white font-semibold mb-4">Winst per product</h2>
             <ResponsiveContainer width="100%" height={280}>
-              <BarChart
-                data={top2025}
-                layout="vertical"
-                margin={{ top: 0, right: 10, left: 70, bottom: 0 }}
-              >
+              <BarChart data={top2025} layout="vertical" margin={{ top: 0, right: 10, left: 70, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#374151" horizontal={false} />
                 <XAxis type="number" tick={{ fill: '#9ca3af', fontSize: 11 }} tickFormatter={(v) => `€${v}`} />
-                <YAxis
-                  type="category"
-                  dataKey="product"
-                  tick={{ fill: '#d1d5db', fontSize: 11 }}
-                  width={70}
-                />
+                <YAxis type="category" dataKey="product" tick={{ fill: '#d1d5db', fontSize: 11 }} width={70} />
                 <Tooltip
                   contentStyle={{ background: '#1f2937', border: '1px solid #374151', borderRadius: '8px' }}
                   labelStyle={{ color: '#f9fafb' }}
@@ -363,7 +359,6 @@ export default function StatistiekenPage() {
             </ResponsiveContainer>
           </div>
 
-          {/* Volledige ranglijst 2025 */}
           <div className="bg-gray-800 rounded-xl p-4">
             <h2 className="text-white font-semibold mb-3">Alle producten 2025</h2>
             <div className="grid grid-cols-3 gap-1 px-1 mb-2">
@@ -384,6 +379,202 @@ export default function StatistiekenPage() {
               ))}
             </div>
           </div>
+        </>
+      )}
+    </div>
+  )
+}
+
+function JasmijnStatistieken({
+  stats,
+  jasmijn,
+  huidigJaar,
+}: {
+  stats: Stats
+  jasmijn: JasmijnStats
+  huidigJaar: number
+}) {
+  const [tab, setTab] = useState<'maand' | 'jaar'>('maand')
+  const maandnamen = ['januari','februari','maart','april','mei','juni','juli','augustus','september','oktober','november','december']
+  const huidigeMaand = maandnamen[new Date().getMonth()]
+
+  const maandData = jasmijn.omzetPerMaand.filter((m) => m.omzet !== 0)
+  const topProductenJaar = jasmijn.omzetPerProduct.slice(0, 8).filter((p) => p.omzet > 0)
+  const topProductenMaand = jasmijn.omzetPerProductDezeMaand.filter((p) => p.omzet > 0).slice(0, 8)
+
+  return (
+    <div className="px-4 pt-6 pb-4">
+      <h1 className="text-2xl font-bold text-white mb-3">Statistieken</h1>
+
+      {/* Tab toggle */}
+      <div className="flex gap-2 mb-5">
+        {(['maand', 'jaar'] as const).map((t) => (
+          <button
+            key={t}
+            onClick={() => setTab(t)}
+            className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${
+              tab === t ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-400 active:bg-gray-600'
+            }`}
+          >
+            {t === 'maand' ? huidigeMaand : huidigJaar}
+          </button>
+        ))}
+      </div>
+
+      {tab === 'maand' ? (
+        <>
+          <p className="text-xs font-semibold text-gray-500 uppercase tracking-widest mb-2">{huidigeMaand}</p>
+          <div className="bg-gray-800 rounded-xl p-4 mb-3">
+            <div className="flex gap-2 mb-4">
+              <div className="flex-1 bg-emerald-900/30 border border-emerald-700/40 rounded-xl p-3 text-center">
+                <p className="text-emerald-400 text-lg font-bold">{formatEuro(jasmijn.omzetBinnenDezeMaand)}</p>
+                <p className="text-emerald-700 text-xs mt-0.5">Geld binnen</p>
+              </div>
+              <div className="flex-1 bg-yellow-900/20 border border-yellow-700/30 rounded-xl p-3 text-center">
+                <p className="text-yellow-400 text-lg font-bold">{formatEuro(jasmijn.omzetOnderwegDezeMaand)}</p>
+                <p className="text-yellow-700 text-xs mt-0.5">Onderweg</p>
+              </div>
+              <div className="flex-1 bg-blue-900/20 border border-blue-700/30 rounded-xl p-3 text-center">
+                <p className="text-blue-400 text-lg font-bold">{formatEuro(jasmijn.commissieDezeMaand)}</p>
+                <p className="text-blue-700 text-xs mt-0.5">Commissie</p>
+              </div>
+            </div>
+            <div className="space-y-2 text-sm">
+              <div className="flex justify-between">
+                <span className="text-gray-400">Omzet</span>
+                <span className="text-white font-medium">{formatEuro(jasmijn.omzetBinnenDezeMaand)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-400">Mijn commissie</span>
+                <span className="text-blue-400">+ {formatEuro(jasmijn.commissieDezeMaand)}</span>
+              </div>
+              <div className="flex justify-between border-t border-gray-700 pt-2">
+                <span className="text-white font-semibold">Verkopen</span>
+                <span className="text-white font-bold">{stats.aantalDezeMaand}x</span>
+              </div>
+            </div>
+          </div>
+
+          {topProductenMaand.length > 0 && (
+            <div className="bg-gray-800 rounded-xl p-4">
+              <h2 className="text-white font-semibold mb-3">Bestsellers</h2>
+              <div className="grid grid-cols-3 gap-1 px-1 mb-2">
+                <span className="text-gray-500 text-xs col-span-2">Product</span>
+                <span className="text-gray-500 text-xs text-right">Omzet</span>
+              </div>
+              <div className="space-y-2">
+                {topProductenMaand.map((p, i) => (
+                  <div key={p.product} className="grid grid-cols-3 gap-1 items-center py-1">
+                    <div className="col-span-2 flex items-center gap-1.5">
+                      <span className="text-gray-600 text-xs w-4 text-right shrink-0">{i + 1}.</span>
+                      <span className="text-gray-200 text-xs truncate">{p.product}</span>
+                    </div>
+                    <span className="text-emerald-400 text-xs font-medium text-right">{formatEuro(p.omzet)}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </>
+      ) : (
+        <>
+          <p className="text-xs font-semibold text-gray-500 uppercase tracking-widest mb-2">{huidigJaar}</p>
+          <div className="bg-gray-800 rounded-xl p-4 mb-3">
+            <div className="flex gap-2 mb-4">
+              <div className="flex-1 bg-emerald-900/30 border border-emerald-700/40 rounded-xl p-3 text-center">
+                <p className="text-emerald-400 text-lg font-bold">{formatEuro(jasmijn.omzetBinnenDitJaar)}</p>
+                <p className="text-emerald-700 text-xs mt-0.5">Geld binnen</p>
+              </div>
+              <div className="flex-1 bg-yellow-900/20 border border-yellow-700/30 rounded-xl p-3 text-center">
+                <p className="text-yellow-400 text-lg font-bold">{formatEuro(jasmijn.omzetOnderweg)}</p>
+                <p className="text-yellow-700 text-xs mt-0.5">Onderweg</p>
+              </div>
+              <div className="flex-1 bg-blue-900/20 border border-blue-700/30 rounded-xl p-3 text-center">
+                <p className="text-blue-400 text-lg font-bold">{formatEuro(jasmijn.commissieDitJaar)}</p>
+                <p className="text-blue-700 text-xs mt-0.5">Commissie</p>
+              </div>
+            </div>
+            <div className="space-y-2 text-sm">
+              <div className="flex justify-between">
+                <span className="text-gray-400">Omzet</span>
+                <span className="text-white font-medium">{formatEuro(jasmijn.omzetBinnenDitJaar)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-400">Mijn commissie</span>
+                <span className="text-blue-400">+ {formatEuro(jasmijn.commissieDitJaar)}</span>
+              </div>
+              <div className="flex justify-between border-t border-gray-700 pt-2">
+                <span className="text-white font-semibold">Verkopen</span>
+                <span className="text-white font-bold">{stats.aantalDitJaar}x</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Omzet per maand grafiek */}
+          <div className="bg-gray-800 rounded-xl p-4 mb-4">
+            <h2 className="text-white font-semibold mb-4">Omzet per maand</h2>
+            {maandData.length > 0 ? (
+              <ResponsiveContainer width="100%" height={200}>
+                <LineChart data={jasmijn.omzetPerMaand} margin={{ top: 5, right: 5, left: -20, bottom: 5 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                  <XAxis dataKey="naam" tick={{ fill: '#9ca3af', fontSize: 11 }} />
+                  <YAxis tick={{ fill: '#9ca3af', fontSize: 11 }} tickFormatter={(v) => `€${v}`} />
+                  <Tooltip
+                    contentStyle={{ background: '#1f2937', border: '1px solid #374151', borderRadius: '8px' }}
+                    labelStyle={{ color: '#f9fafb' }}
+                    formatter={(value) => [formatEuro(Number(value)), 'Omzet']}
+                  />
+                  <Line type="monotone" dataKey="omzet" stroke="#34d399" strokeWidth={2} dot={{ fill: '#34d399', r: 3 }} />
+                </LineChart>
+              </ResponsiveContainer>
+            ) : (
+              <p className="text-gray-500 text-sm text-center py-8">Nog geen data dit jaar</p>
+            )}
+          </div>
+
+          {/* Omzet per product grafiek */}
+          {topProductenJaar.length > 0 && (
+            <div className="bg-gray-800 rounded-xl p-4 mb-4">
+              <h2 className="text-white font-semibold mb-4">Omzet per product</h2>
+              <ResponsiveContainer width="100%" height={220}>
+                <BarChart data={topProductenJaar} layout="vertical" margin={{ top: 0, right: 10, left: 60, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#374151" horizontal={false} />
+                  <XAxis type="number" tick={{ fill: '#9ca3af', fontSize: 11 }} tickFormatter={(v) => `€${v}`} />
+                  <YAxis type="category" dataKey="product" tick={{ fill: '#d1d5db', fontSize: 11 }} width={60} />
+                  <Tooltip
+                    contentStyle={{ background: '#1f2937', border: '1px solid #374151', borderRadius: '8px' }}
+                    labelStyle={{ color: '#f9fafb' }}
+                    formatter={(value) => [formatEuro(Number(value)), 'Omzet']}
+                  />
+                  <Bar dataKey="omzet" fill="#3b82f6" radius={[0, 4, 4, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+
+          {/* Bestsellers jaar */}
+          {topProductenJaar.length > 0 && (
+            <div className="bg-gray-800 rounded-xl p-4">
+              <h2 className="text-white font-semibold mb-3">Bestsellers {huidigJaar}</h2>
+              <div className="grid grid-cols-3 gap-1 px-1 mb-2">
+                <span className="text-gray-500 text-xs col-span-2">Product</span>
+                <span className="text-gray-500 text-xs text-right">Omzet</span>
+              </div>
+              <div className="space-y-2">
+                {jasmijn.omzetPerProduct
+                  .filter((p) => p.omzet > 0)
+                  .map((p, i) => (
+                    <div key={p.product} className="grid grid-cols-3 gap-1 items-center py-1">
+                      <div className="col-span-2 flex items-center gap-1.5">
+                        <span className="text-gray-600 text-xs w-4 text-right shrink-0">{i + 1}.</span>
+                        <span className="text-gray-200 text-xs truncate">{p.product}</span>
+                      </div>
+                      <span className="text-emerald-400 text-xs font-medium text-right">{formatEuro(p.omzet)}</span>
+                    </div>
+                  ))}
+              </div>
+            </div>
+          )}
         </>
       )}
     </div>

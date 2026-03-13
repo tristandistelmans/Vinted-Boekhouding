@@ -3,6 +3,7 @@ import { supabase } from '@/lib/supabase'
 import { berekenWinst, berekenCommissie, PRODUCTEN, ACTIEVE_STATUSSEN } from '@/lib/constants'
 
 export async function GET(request: NextRequest) {
+  try {
   const currentUser = request.cookies.get('user')?.value || 'tristan'
   const isJasmijn = currentUser === 'jasmijn'
 
@@ -349,6 +350,10 @@ export async function GET(request: NextRequest) {
     jasmijnStats,
     jasmijnOpenstaand,
   })
+  } catch (err) {
+    console.error('Stats route error:', err)
+    return NextResponse.json({ error: String(err) }, { status: 500 })
+  }
 }
 
 function berekenGemKost(inkopen: { product: string; totale_aankoopprijs: number; aantal: number }[]) {

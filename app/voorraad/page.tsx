@@ -30,6 +30,7 @@ export default function VoorraadPage() {
   const [inkopen, setInkopen] = useState<Inkoop[]>([])
   const [voorraad, setVooraad] = useState<VoorraadItem[]>([])
   const [extraKosten, setExtraKosten] = useState<ExtraKost[]>([])
+  const [isCEO, setIsCEO] = useState(true)
   const [laden, setLaden] = useState(true)
   const [fout, setFout] = useState('')
   const vandaag = new Date().toISOString().split('T')[0]
@@ -76,6 +77,7 @@ export default function VoorraadPage() {
 
   useEffect(() => {
     laadData()
+    fetch('/api/auth/me').then((r) => r.json()).then((d) => setIsCEO(d.isCEO))
   }, [laadData])
 
   function updateForm(key: string, value: string) {
@@ -197,7 +199,7 @@ export default function VoorraadPage() {
     <div className="px-4 pt-6 pb-4">
       <h1 className="text-2xl font-bold text-white mb-4">Voorraad</h1>
 
-      {/* Tabbladen */}
+      {/* Tabbladen — Inkoop en Extra kosten alleen voor CEO */}
       <div className="flex gap-1 mb-5 bg-gray-800 rounded-xl p-1">
         <button
           onClick={() => setTabblad('overzicht')}
@@ -207,22 +209,26 @@ export default function VoorraadPage() {
         >
           Overzicht
         </button>
-        <button
-          onClick={() => setTabblad('bestelling')}
-          className={`flex-1 py-2.5 rounded-lg text-xs font-medium transition-colors ${
-            tabblad === 'bestelling' ? 'bg-blue-600 text-white' : 'text-gray-400'
-          }`}
-        >
-          Inkoop
-        </button>
-        <button
-          onClick={() => setTabblad('extra-kosten')}
-          className={`flex-1 py-2.5 rounded-lg text-xs font-medium transition-colors ${
-            tabblad === 'extra-kosten' ? 'bg-blue-600 text-white' : 'text-gray-400'
-          }`}
-        >
-          Extra kosten
-        </button>
+        {isCEO && (
+          <button
+            onClick={() => setTabblad('bestelling')}
+            className={`flex-1 py-2.5 rounded-lg text-xs font-medium transition-colors ${
+              tabblad === 'bestelling' ? 'bg-blue-600 text-white' : 'text-gray-400'
+            }`}
+          >
+            Inkoop
+          </button>
+        )}
+        {isCEO && (
+          <button
+            onClick={() => setTabblad('extra-kosten')}
+            className={`flex-1 py-2.5 rounded-lg text-xs font-medium transition-colors ${
+              tabblad === 'extra-kosten' ? 'bg-blue-600 text-white' : 'text-gray-400'
+            }`}
+          >
+            Extra kosten
+          </button>
+        )}
       </div>
 
       {laden && <div className="text-center text-gray-400 py-16">Laden...</div>}
@@ -265,8 +271,8 @@ export default function VoorraadPage() {
             </div>
           ))}
 
-          {/* Recente inkopen */}
-          {inkopen.filter((i) => i.status !== 'Beginsaldo').length > 0 && (
+          {/* Recente inkopen — alleen voor CEO */}
+          {isCEO && inkopen.filter((i) => i.status !== 'Beginsaldo').length > 0 && (
             <>
               <h2 className="text-white font-semibold mt-5 mb-2">Recente inkopen</h2>
               {inkopen.filter((i) => i.status !== 'Beginsaldo').slice(0, 20).map((inkoop) => (

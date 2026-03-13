@@ -9,9 +9,9 @@ export function middleware(request: NextRequest) {
   }
 
   const token = request.cookies.get('auth_token')?.value
-  const expectedToken = process.env.AUTH_TOKEN
+  const validTokens = [process.env.AUTH_TOKEN, process.env.AUTH_TOKEN_JASMIJN].filter(Boolean)
 
-  if (!token || token !== expectedToken) {
+  if (!token || !validTokens.includes(token)) {
     return NextResponse.redirect(new URL('/login', request.url))
   }
 
