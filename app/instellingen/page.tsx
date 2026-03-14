@@ -10,6 +10,9 @@ interface SyncResultaat {
   fouten: string[]
 }
 
+type CommissieRegels = { drempel1: number; commissie1: number; drempel2: number; commissie2: number; extraStap: number; extraBedrag: number }
+const DEFAULT_REGELS: CommissieRegels = { drempel1: 30, commissie1: 3, drempel2: 35, commissie2: 5, extraStap: 5, extraBedrag: 2.5 }
+
 export default function InstellingenPage() {
   const router = useRouter()
   const [rawInput, setRawInput] = useState('')
@@ -24,6 +27,10 @@ export default function InstellingenPage() {
 
   const [laatste_sync, setLaatsteSyncTijd] = useState<string | null>(null)
 
+  const [commRegels, setCommRegels] = useState<CommissieRegels>(DEFAULT_REGELS)
+  const [commOpslaan, setCommOpslaan] = useState(false)
+  const [commBericht, setCommBericht] = useState<{ ok: boolean; tekst: string } | null>(null)
+
   useEffect(() => {
     fetch('/api/instellingen')
       .then((r) => r.json())
@@ -32,9 +39,34 @@ export default function InstellingenPage() {
         const map = Object.fromEntries(rows.map((r) => [r.sleutel, r.waarde]))
         if (map.vinted_access_token) setHeeftToken(true)
         if (map.laatste_sync) setLaatsteSyncTijd(map.laatste_sync)
+        if (map.commissie_regels) {
+          try { setCommRegels({ ...DEFAULT_REGELS, ...JSON.parse(map.commissie_regels) }) } catch { /* gebruik default */ }
+        }
       })
       .catch(() => {})
   }, [])
+
+  async function handleCommOpslaaan() {
+    setCommOpslaan(true)
+    setCommBericht(null)
+    try {
+      await fetch('/api/instellingen', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sleutel: 'commissie_regels', waarde: JSON.stringify(commRegels) }),
+      })
+      setCommBericht({ ok: true, tekst: 'Commissie opgeslagen' })
+    } catch {
+      setCommBericht({ ok: false, tekst: 'Opslaan mislukt' })
+    } finally {
+      setCommOpslaan(false)
+    }
+  }
+
+  function updateComm(key: keyof CommissieRegels, val: string) {
+    const n = parseFloat(val)
+    if (!isNaN(n)) setCommRegels((r) => ({ ...r, [key]: n }))
+  }
 
   async function handleOpslaan() {
     setParseError(null)
@@ -214,6 +246,53 @@ export default function InstellingenPage() {
             <div className="bg-red-900/30 border border-red-700 rounded-lg p-3">
               <p className="text-sm text-red-300">{syncFout}</p>
             </div>
+          )}
+        </section>
+
+        {/* Commissie regels Jasmijn */}
+        <section className="bg-gray-900 rounded-xl p-4 space-y-4">
+          <h2 className="font-semibold text-gray-200">Commissie Jasmijn</h2>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs text-gray-400 mb-1">Drempel 1 (€)</label>
+              <input type="number" step="0.5" value={commRegels.drempel1} onChange={(e) => updateComm('drempel1', e.target.value)}
+                className="w-full bg-gray-800 text-white rounded-lg px-3 py-2 text-sm border border-gray-700 focus:outline-none focus:border-blue-500" />
+            </div>
+            <div>
+              <label className="block text-xs text-gray-400 mb-1">Commissie bij drempel 1 (€)</label>
+              <input type="number" step="0.5" value={commRegels.commissie1} onChange={(e) => updateComm('commissie1', e.target.value)}
+                className="w-full bg-gray-800 text-white rounded-lg px-3 py-2 text-sm border border-gray-700 focus:outline-none focus:border-blue-500" />
+            </div>
+            <div>
+              <label className="block text-xs text-gray-400 mb-1">Drempel 2 (€)</label>
+              <input type="number" step="0.5" value={commRegels.drempel2} onChange={(e) => updateComm('drempel2', e.target.value)}
+                className="w-full bg-gray-800 text-white rounded-lg px-3 py-2 text-sm border border-gray-700 focus:outline-none focus:border-blue-500" />
+            </div>
+            <div>
+              <label className="block text-xs text-gray-400 mb-1">Commissie bij drempel 2 (€)</label>
+              <input type="number" step="0.5" value={commRegels.commissie2} onChange={(e) => updateComm('commissie2', e.target.value)}
+                className="w-full bg-gray-800 text-white rounded-lg px-3 py-2 text-sm border border-gray-700 focus:outline-none focus:border-blue-500" />
+            </div>
+            <div>
+              <label className="block text-xs text-gray-400 mb-1">Extra stap (€)</label>
+              <input type="number" step="0.5" value={commRegels.extraStap} onChange={(e) => updateComm('extraStap', e.target.value)}
+                className="w-full bg-gray-800 text-white rounded-lg px-3 py-2 text-sm border border-gray-700 focus:outline-none focus:border-blue-500" />
+            </div>
+            <div>
+              <label className="block text-xs text-gray-400 mb-1">Extra commissie per stap (€)</label>
+              <input type="number" step="0.5" value={commRegels.extraBedrag} onChange={(e) => updateComm('extraBedrag', e.target.value)}
+                className="w-full bg-gray-800 text-white rounded-lg px-3 py-2 text-sm border border-gray-700 focus:outline-none focus:border-blue-500" />
+            </div>
+          </div>
+          <p className="text-xs text-gray-500">
+            Huidig: &lt;€{commRegels.drempel1} = €0 · €{commRegels.drempel1}–{commRegels.drempel2 - 0.01} = €{commRegels.commissie1} · €{commRegels.drempel2}+ = €{commRegels.commissie2} + €{commRegels.extraBedrag} per €{commRegels.extraStap}
+          </p>
+          <button onClick={handleCommOpslaaan} disabled={commOpslaan}
+            className="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-medium rounded-lg py-2 text-sm transition-colors">
+            {commOpslaan ? 'Opslaan...' : 'Opslaan'}
+          </button>
+          {commBericht && (
+            <p className={`text-sm text-center ${commBericht.ok ? 'text-emerald-400' : 'text-red-400'}`}>{commBericht.tekst}</p>
           )}
         </section>
 

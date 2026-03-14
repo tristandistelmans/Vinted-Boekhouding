@@ -15,9 +15,11 @@ type TeBetalenVerkoop = {
 type JasmijnStats = {
   commissieDezeMaand: number
   commissieBinnenDezeMaand: number
+  commissieOnderwegDezeMaand: number
   omzetBinnenDezeMaand: number
   omzetOnderwegDezeMaand: number
   commissieBinnenDitJaar: number
+  commissieOnderwegDitJaar: number
   omzetBinnenDitJaar: number
   omzetOnderweg: number
   teBetalen: number
@@ -33,6 +35,8 @@ type Stats = {
   omzetDitJaar: number
   kostenProductDitJaar: number
   commissiesDitJaar: number
+  commissiesBinnenDitJaar: number
+  commissiesOnderwegDitJaar: number
   extraKostenDitJaar: number
   geldBinnen: number
   geldVerwacht: number
@@ -41,6 +45,8 @@ type Stats = {
   omzetDezeMaand: number
   kostenProductDezeMaand: number
   commissiesDezeMaand: number
+  commissiesBinnenDezeMaand: number
+  commissiesOnderwegDezeMaand: number
   extraKostenDezeMaand: number
   geldBinnenDezeMaand: number
   geldVerwachtDezeMaand: number
@@ -120,6 +126,18 @@ function JasmijnDashboard({
   huidigJaar: number
 }) {
   const [showTeBetalenDetail, setShowTeBetalenDetail] = useState(false)
+  const [storting, setStorting] = useState<'idle' | 'laden' | 'klaar'>('idle')
+
+  async function markeerGestort() {
+    setStorting('laden')
+    const res = await fetch('/api/uitbetaald', { method: 'POST' })
+    if (res.ok) {
+      setStorting('klaar')
+      setTimeout(() => window.location.reload(), 800)
+    } else {
+      setStorting('idle')
+    }
+  }
 
   return (
     <>
@@ -141,12 +159,6 @@ function JasmijnDashboard({
           {jasmijn.teBetalen > 0 ? formatEuro(jasmijn.teBetalen) : 'Alles betaald ✓'}
         </p>
 
-        {jasmijn.teBetalen > 0 && (
-          <p className="text-xs text-gray-500 mb-3">
-            Dit zijn afgeronde sales waarvan je het geld nog niet hebt overgemaakt.
-          </p>
-        )}
-
         {/* Per-sale detail */}
         {showTeBetalenDetail && jasmijn.teBetalenVerkopen.length > 0 && (
           <div className="border-t border-gray-700 pt-3 space-y-2 mb-3">
@@ -167,6 +179,16 @@ function JasmijnDashboard({
             ))}
           </div>
         )}
+
+        {jasmijn.teBetalen > 0 && (
+          <button
+            onClick={markeerGestort}
+            disabled={storting !== 'idle'}
+            className="w-full mt-1 bg-orange-600 hover:bg-orange-500 disabled:opacity-60 text-white text-sm font-semibold py-2.5 rounded-xl transition-colors"
+          >
+            {storting === 'laden' ? '...' : storting === 'klaar' ? 'Gestort ✓' : 'Gestort aan Tristan'}
+          </button>
+        )}
       </div>
 
       {/* COMMISSIE — deze maand */}
@@ -183,7 +205,11 @@ function JasmijnDashboard({
           </div>
           <div className="flex-1 bg-blue-900/20 border border-blue-700/30 rounded-xl p-2.5 text-center min-w-0">
             <p className="text-blue-400 text-sm font-bold leading-tight truncate">{formatEuro(jasmijn.commissieBinnenDezeMaand)}</p>
-            <p className="text-blue-700 text-xs mt-0.5">Mijn commissie</p>
+            <p className="text-blue-700 text-xs mt-0.5">Comm. binnen</p>
+          </div>
+          <div className="flex-1 bg-indigo-900/20 border border-indigo-700/30 rounded-xl p-2.5 text-center min-w-0">
+            <p className="text-indigo-400 text-sm font-bold leading-tight truncate">{formatEuro(jasmijn.commissieOnderwegDezeMaand)}</p>
+            <p className="text-indigo-700 text-xs mt-0.5">Comm. onderweg</p>
           </div>
         </div>
 
@@ -193,7 +219,7 @@ function JasmijnDashboard({
             <span className="text-white font-medium">{formatEuro(jasmijn.omzetBinnenDezeMaand)}</span>
           </div>
           <div className="flex justify-between">
-            <span className="text-gray-400">Mijn commissie</span>
+            <span className="text-gray-400">Commissie binnen</span>
             <span className="text-blue-400">+ {formatEuro(jasmijn.commissieBinnenDezeMaand)}</span>
           </div>
           <div className="flex justify-between border-t border-gray-700 pt-2">
@@ -222,7 +248,11 @@ function JasmijnDashboard({
           </div>
           <div className="flex-1 bg-blue-900/20 border border-blue-700/30 rounded-xl p-2.5 text-center min-w-0">
             <p className="text-blue-400 text-sm font-bold leading-tight truncate">{formatEuro(jasmijn.commissieBinnenDitJaar)}</p>
-            <p className="text-blue-700 text-xs mt-0.5">Mijn commissie</p>
+            <p className="text-blue-700 text-xs mt-0.5">Comm. binnen</p>
+          </div>
+          <div className="flex-1 bg-indigo-900/20 border border-indigo-700/30 rounded-xl p-2.5 text-center min-w-0">
+            <p className="text-indigo-400 text-sm font-bold leading-tight truncate">{formatEuro(jasmijn.commissieOnderwegDitJaar)}</p>
+            <p className="text-indigo-700 text-xs mt-0.5">Comm. onderweg</p>
           </div>
         </div>
 
@@ -232,7 +262,7 @@ function JasmijnDashboard({
             <span className="text-white font-medium">{formatEuro(jasmijn.omzetBinnenDitJaar)}</span>
           </div>
           <div className="flex justify-between">
-            <span className="text-gray-400">Totale commissie</span>
+            <span className="text-gray-400">Commissie binnen</span>
             <span className="text-blue-400">+ {formatEuro(jasmijn.commissieBinnenDitJaar)}</span>
           </div>
           <div className="flex justify-between border-t border-gray-700 pt-2">
@@ -280,10 +310,16 @@ function CEODashboard({
             <p className="text-red-400 text-sm font-bold leading-tight truncate">−{formatEuro(stats.kostenInkopenDezeMaand + stats.extraKostenDezeMaand)}</p>
             <p className="text-red-700 text-xs mt-0.5">Kosten</p>
           </div>
-          {stats.commissiesDezeMaand > 0 && (
+          {stats.commissiesBinnenDezeMaand > 0 && (
             <div className="flex-1 bg-blue-900/20 border border-blue-700/30 rounded-xl p-2.5 text-center min-w-0">
-              <p className="text-blue-400 text-sm font-bold leading-tight truncate">−{formatEuro(stats.commissiesDezeMaand)}</p>
-              <p className="text-blue-700 text-xs mt-0.5">Commissies</p>
+              <p className="text-blue-400 text-sm font-bold leading-tight truncate">−{formatEuro(stats.commissiesBinnenDezeMaand)}</p>
+              <p className="text-blue-700 text-xs mt-0.5">Comm. binnen</p>
+            </div>
+          )}
+          {stats.commissiesOnderwegDezeMaand > 0 && (
+            <div className="flex-1 bg-indigo-900/20 border border-indigo-700/30 rounded-xl p-2.5 text-center min-w-0">
+              <p className="text-indigo-400 text-sm font-bold leading-tight truncate">−{formatEuro(stats.commissiesOnderwegDezeMaand)}</p>
+              <p className="text-indigo-700 text-xs mt-0.5">Comm. onderweg</p>
             </div>
           )}
         </div>
@@ -299,10 +335,16 @@ function CEODashboard({
               <span className="text-red-400">− {formatEuro(stats.kostenInkopenDezeMaand)}</span>
             </div>
           )}
-          {stats.commissiesDezeMaand > 0 && (
+          {stats.commissiesBinnenDezeMaand > 0 && (
             <div className="flex justify-between">
-              <span className="text-gray-400">Commissies Jasmijn</span>
-              <span className="text-blue-400">− {formatEuro(stats.commissiesDezeMaand)}</span>
+              <span className="text-gray-400">Commissie Jasmijn binnen</span>
+              <span className="text-blue-400">− {formatEuro(stats.commissiesBinnenDezeMaand)}</span>
+            </div>
+          )}
+          {stats.commissiesOnderwegDezeMaand > 0 && (
+            <div className="flex justify-between">
+              <span className="text-gray-400">Commissie Jasmijn onderweg</span>
+              <span className="text-indigo-400">− {formatEuro(stats.commissiesOnderwegDezeMaand)}</span>
             </div>
           )}
           {stats.extraKostenDezeMaand > 0 && (
@@ -343,10 +385,16 @@ function CEODashboard({
               <p className="text-red-700 text-xs mt-0.5">Kosten</p>
             </div>
           )}
-          {stats.commissiesDitJaar > 0 && (
+          {stats.commissiesBinnenDitJaar > 0 && (
             <div className="flex-1 bg-blue-900/20 border border-blue-700/30 rounded-xl p-2.5 text-center min-w-0">
-              <p className="text-blue-400 text-sm font-bold leading-tight truncate">−{formatEuro(stats.commissiesDitJaar)}</p>
-              <p className="text-blue-700 text-xs mt-0.5">Commissies</p>
+              <p className="text-blue-400 text-sm font-bold leading-tight truncate">−{formatEuro(stats.commissiesBinnenDitJaar)}</p>
+              <p className="text-blue-700 text-xs mt-0.5">Comm. binnen</p>
+            </div>
+          )}
+          {stats.commissiesOnderwegDitJaar > 0 && (
+            <div className="flex-1 bg-indigo-900/20 border border-indigo-700/30 rounded-xl p-2.5 text-center min-w-0">
+              <p className="text-indigo-400 text-sm font-bold leading-tight truncate">−{formatEuro(stats.commissiesOnderwegDitJaar)}</p>
+              <p className="text-indigo-700 text-xs mt-0.5">Comm. onderweg</p>
             </div>
           )}
         </div>
@@ -362,10 +410,16 @@ function CEODashboard({
               <span className="text-red-400">− {formatEuro(stats.kostenInkopenDitJaar)}</span>
             </div>
           )}
-          {stats.commissiesDitJaar > 0 && (
+          {stats.commissiesBinnenDitJaar > 0 && (
             <div className="flex justify-between">
-              <span className="text-gray-400">Commissies Jasmijn</span>
-              <span className="text-blue-400">− {formatEuro(stats.commissiesDitJaar)}</span>
+              <span className="text-gray-400">Commissie Jasmijn binnen</span>
+              <span className="text-blue-400">− {formatEuro(stats.commissiesBinnenDitJaar)}</span>
+            </div>
+          )}
+          {stats.commissiesOnderwegDitJaar > 0 && (
+            <div className="flex justify-between">
+              <span className="text-gray-400">Commissie Jasmijn onderweg</span>
+              <span className="text-indigo-400">− {formatEuro(stats.commissiesOnderwegDitJaar)}</span>
             </div>
           )}
           {stats.extraKostenDitJaar > 0 && (

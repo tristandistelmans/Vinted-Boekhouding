@@ -126,12 +126,30 @@ export function mapVintedProduct(title: string): string {
   return 'Onbekend'
 }
 
-export function berekenCommissie(verkoopprijs: number): number {
-  if (verkoopprijs >= 35) {
-    return 5 + Math.floor((verkoopprijs - 35) / 5) * 2.5
+export type CommissieRegels = {
+  drempel1: number
+  commissie1: number
+  drempel2: number
+  commissie2: number
+  extraStap: number
+  extraBedrag: number
+}
+
+export const DEFAULT_COMMISSIE_REGELS: CommissieRegels = {
+  drempel1: 30,
+  commissie1: 3,
+  drempel2: 35,
+  commissie2: 5,
+  extraStap: 5,
+  extraBedrag: 2.5,
+}
+
+export function berekenCommissie(verkoopprijs: number, regels: CommissieRegels = DEFAULT_COMMISSIE_REGELS): number {
+  if (verkoopprijs >= regels.drempel2) {
+    return regels.commissie2 + Math.floor((verkoopprijs - regels.drempel2) / regels.extraStap) * regels.extraBedrag
   }
-  if (verkoopprijs >= 30) {
-    return 3
+  if (verkoopprijs >= regels.drempel1) {
+    return regels.commissie1
   }
   return 0
 }

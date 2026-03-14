@@ -14,9 +14,22 @@ import {
   Line,
 } from 'recharts'
 
+type CommissieRegels = {
+  drempel1: number
+  commissie1: number
+  drempel2: number
+  commissie2: number
+  extraStap: number
+  extraBedrag: number
+}
+
 type JasmijnStats = {
   commissieDitJaar: number
   commissieDezeMaand: number
+  commissieBinnenDitJaar: number
+  commissieBinnenDezeMaand: number
+  commissieOnderwegDitJaar: number
+  commissieOnderwegDezeMaand: number
   omzetBinnenDitJaar: number
   omzetBinnenDezeMaand: number
   omzetOnderweg: number
@@ -44,6 +57,7 @@ type Stats = {
   winstPerProduct: { product: string; winst: number; aantal: number; gemVerkoopprijs: number }[]
   winstPerAccount: { account: string; winst: number; aantal: number }[]
   jasmijnStats?: JasmijnStats
+  commissieRegels?: CommissieRegels
 }
 
 const STATS_2025 = {
@@ -103,7 +117,7 @@ export default function StatistiekenPage() {
 
   // Jasmijn krijgt eigen weergave
   if (isJasmijn && stats.jasmijnStats) {
-    return <JasmijnStatistieken stats={stats} jasmijn={stats.jasmijnStats} huidigJaar={huidigJaar} />
+    return <JasmijnStatistieken stats={stats} jasmijn={stats.jasmijnStats} huidigJaar={huidigJaar} commissieRegels={stats.commissieRegels} />
   }
 
   const maandData = stats.winstPerMaand.filter((m) => m.winst !== 0)
@@ -389,25 +403,24 @@ function JasmijnStatistieken({
   stats,
   jasmijn,
   huidigJaar,
+  commissieRegels,
 }: {
   stats: Stats
   jasmijn: JasmijnStats
   huidigJaar: number
+  commissieRegels?: CommissieRegels
 }) {
   const [tab, setTab] = useState<'maand' | 'jaar'>('maand')
-  const [storting, setStorting] = useState<'idle' | 'laden' | 'klaar'>('idle')
-
-  async function markeerGestort() {
-    setStorting('laden')
-    const res = await fetch('/api/uitbetaald', { method: 'POST' })
-    if (res.ok) {
-      setStorting('klaar')
-      setTimeout(() => window.location.reload(), 1000)
-    } else {
-      setStorting('idle')
-    }
-  }
   const maandnamen = ['januari','februari','maart','april','mei','juni','juli','augustus','september','oktober','november','december']
+
+  // Tarieven tabel genereren op basis van commissie regels
+  const regels = commissieRegels ?? { drempel1: 30, commissie1: 3, drempel2: 35, commissie2: 5, extraStap: 5, extraBedrag: 2.5 }
+  function berekenComm(prijs: number): number {
+    if (prijs >= regels.drempel2) return regels.commissie2 + Math.floor((prijs - regels.drempel2) / regels.extraStap) * regels.extraBedrag
+    if (prijs >= regels.drempel1) return regels.commissie1
+    return 0
+  }
+  const tariefPrijzen = Array.from({ length: 8 }, (_, i) => 25 + i * 5) // 25, 30, 35, 40, 45, 50, 55, 60
   const huidigeMaand = maandnamen[new Date().getMonth()]
 
   const maandData = jasmijn.omzetPerMaand.filter((m) => m.omzet !== 0)
@@ -417,23 +430,6 @@ function JasmijnStatistieken({
   return (
     <div className="px-4 pt-6 pb-4">
       <h1 className="text-2xl font-bold text-white mb-3">Statistieken</h1>
-
-      {/* Te storten aan Tristan */}
-      {jasmijn.teBetalen > 0 && (
-        <div className="bg-orange-900/30 border border-orange-700/50 rounded-xl p-4 mb-4 flex items-center justify-between gap-3">
-          <div>
-            <p className="text-orange-300 text-xs font-medium mb-0.5">Te storten aan Tristan</p>
-            <p className="text-white text-xl font-bold">{formatEuro(jasmijn.teBetalen)}</p>
-          </div>
-          <button
-            onClick={markeerGestort}
-            disabled={storting !== 'idle'}
-            className="bg-orange-600 hover:bg-orange-500 disabled:opacity-60 text-white text-sm font-semibold px-4 py-2 rounded-xl transition-colors shrink-0"
-          >
-            {storting === 'laden' ? '...' : storting === 'klaar' ? 'Gestort ✓' : 'Gestort'}
-          </button>
-        </div>
-      )}
 
       {/* Tab toggle */}
       <div className="flex gap-2 mb-5">
@@ -606,6 +602,28 @@ function JasmijnStatistieken({
           )}
         </>
       )}
+
+      {/* Commissie tarieven tabel */}
+      <div className="bg-gray-800 rounded-xl p-4 mt-4">
+        <h2 className="text-white font-semibold mb-3">Mijn commissie per verkoopprijs</h2>
+        <div className="grid grid-cols-2 gap-1 px-1 mb-2">
+          <span className="text-gray-500 text-xs">Verkoopprijs</span>
+          <span className="text-gray-500 text-xs text-right">Jouw commissie</span>
+        </div>
+        <div className="space-y-1.5">
+          {tariefPrijzen.map((prijs) => {
+            const comm = berekenComm(prijs)
+            return (
+              <div key={prijs} className="flex justify-between items-center py-1 border-b border-gray-700/50 last:border-0">
+                <span className="text-gray-300 text-sm">{formatEuro(prijs)}</span>
+                <span className={`text-sm font-semibold ${comm > 0 ? 'text-blue-400' : 'text-gray-600'}`}>
+                  {comm > 0 ? `+ ${formatEuro(comm)}` : '—'}
+                </span>
+              </div>
+            )
+          })}
+        </div>
+      </div>
     </div>
   )
 }

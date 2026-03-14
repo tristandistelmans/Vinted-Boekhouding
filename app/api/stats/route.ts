@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
-import { berekenWinst, berekenCommissie, PRODUCTEN, ACTIEVE_STATUSSEN } from '@/lib/constants'
+import { berekenWinst, berekenCommissie, PRODUCTEN, ACTIEVE_STATUSSEN, DEFAULT_COMMISSIE_REGELS, CommissieRegels } from '@/lib/constants'
 
 export async function GET(request: NextRequest) {
   try {
@@ -11,11 +11,24 @@ export async function GET(request: NextRequest) {
     { data: alleVerkopen, error: vError },
     { data: inkopen, error: iError },
     { data: extraKostenData },
+    { data: instellingenData },
   ] = await Promise.all([
     supabase.from('verkopen').select('*'),
     supabase.from('inkopen').select('*'),
     supabase.from('extra_kosten').select('*'),
+    supabase.from('instellingen').select('sleutel, waarde').eq('sleutel', 'commissie_regels'),
   ])
+
+  // Commissie regels ophalen (of default gebruiken)
+  let commissieRegels: CommissieRegels = DEFAULT_COMMISSIE_REGELS
+  try {
+    const regelRow = (instellingenData || []).find((r: { sleutel: string }) => r.sleutel === 'commissie_regels')
+    if (regelRow?.waarde) {
+      commissieRegels = { ...DEFAULT_COMMISSIE_REGELS, ...JSON.parse(regelRow.waarde) }
+    }
+  } catch { /* gebruik default */ }
+
+  const comm = (prijs: number) => berekenCommissie(prijs, commissieRegels)
 
   if (vError || iError) {
     return NextResponse.json({ error: 'Kon stats niet ophalen' }, { status: 500 })
@@ -34,7 +47,7 @@ export async function GET(request: NextRequest) {
     // Voor CEO: Jasmijn's commissie gaat van Tristans winst af
     const winst =
       !isJasmijn && v.account === '3-jasmijn' && basisWinst !== null && ACTIEVE_STATUSSEN.includes(v.status)
-        ? basisWinst - berekenCommissie(v.verkoopprijs)
+        ? basisWinst - comm(v.verkoopprijs)
         : basisWinst
     return { ...v, aankoopprijs, winst }
   })
@@ -138,9 +151,14 @@ export async function GET(request: NextRequest) {
   const kostenProductDitJaar = actieveVerkopen.reduce((s, v) => s + v.aankoopprijs, 0)
 
   // Commissies betaald aan Jasmijn (actieve Jasmijn verkopen)
-  const commissiesDitJaar = actieveVerkopen
-    .filter((v) => v.account === '3-jasmijn')
-    .reduce((s, v) => s + berekenCommissie(v.verkoopprijs), 0)
+  const jasmijnActiefDitJaar = actieveVerkopen.filter((v) => v.account === '3-jasmijn')
+  const commissiesDitJaar = jasmijnActiefDitJaar.reduce((s, v) => s + comm(v.verkoopprijs), 0)
+  const commissiesBinnenDitJaar = jasmijnActiefDitJaar
+    .filter((v) => v.status === 'Afgerond (geld binnen)')
+    .reduce((s, v) => s + comm(v.verkoopprijs), 0)
+  const commissiesOnderwegDitJaar = jasmijnActiefDitJaar
+    .filter((v) => v.status !== 'Afgerond (geld binnen)')
+    .reduce((s, v) => s + comm(v.verkoopprijs), 0)
 
   const kostenInkopenDitJaar = inkopenArr
     .filter((i: { besteldatum: string; status: string; totale_aankoopprijs: number }) =>
@@ -170,9 +188,14 @@ export async function GET(request: NextRequest) {
   const actieveVerkopenDezeMaand = verkopenDezeMaand.filter((v) => actieveStatussen.includes(v.status))
   const omzetDezeMaand = actieveVerkopenDezeMaand.reduce((s, v) => s + v.verkoopprijs, 0)
   const kostenProductDezeMaand = actieveVerkopenDezeMaand.reduce((s, v) => s + v.aankoopprijs, 0)
-  const commissiesDezeMaand = actieveVerkopenDezeMaand
-    .filter((v) => v.account === '3-jasmijn')
-    .reduce((s, v) => s + berekenCommissie(v.verkoopprijs), 0)
+  const jasmijnActiefDezeMaand = actieveVerkopenDezeMaand.filter((v) => v.account === '3-jasmijn')
+  const commissiesDezeMaand = jasmijnActiefDezeMaand.reduce((s, v) => s + comm(v.verkoopprijs), 0)
+  const commissiesBinnenDezeMaand = jasmijnActiefDezeMaand
+    .filter((v) => v.status === 'Afgerond (geld binnen)')
+    .reduce((s, v) => s + comm(v.verkoopprijs), 0)
+  const commissiesOnderwegDezeMaand = jasmijnActiefDezeMaand
+    .filter((v) => v.status !== 'Afgerond (geld binnen)')
+    .reduce((s, v) => s + comm(v.verkoopprijs), 0)
   const extraKostenDezeMaand = (extraKostenData || [])
     .filter((e: { datum: string }) => {
       const d = new Date(e.datum)
@@ -215,15 +238,15 @@ export async function GET(request: NextRequest) {
     // Omzet binnen (afgeronde verkopen — alle tijden)
     const afgerondAlleT = verkopenMetWinst.filter((v) => v.status === 'Afgerond (geld binnen)')
     const omzetBinnenAlleT = afgerondAlleT.reduce((s, v) => s + v.verkoopprijs, 0)
-    const commissieAlleT = afgerondAlleT.reduce((s, v) => s + berekenCommissie(v.verkoopprijs), 0)
+    const commissieAlleT = afgerondAlleT.reduce((s, v) => s + comm(v.verkoopprijs), 0)
 
     // Commissie dit jaar
     const actieveJaar = verkopenDitJaar.filter((v) => actieveStatussen.includes(v.status))
-    const commissieDitJaar = actieveJaar.reduce((s, v) => s + berekenCommissie(v.verkoopprijs), 0)
+    const commissieDitJaar = actieveJaar.reduce((s, v) => s + comm(v.verkoopprijs), 0)
 
     // Commissie deze maand
     const actiefMaand = verkopenDezeMaand.filter((v) => actieveStatussen.includes(v.status))
-    const commissieDezeMaand = actiefMaand.reduce((s, v) => s + berekenCommissie(v.verkoopprijs), 0)
+    const commissieDezeMaand = actiefMaand.reduce((s, v) => s + comm(v.verkoopprijs), 0)
 
     // Omzet dit jaar / deze maand (voor KPI's)
     const omzetBinnenDitJaar = verkopenDitJaar
@@ -236,17 +259,25 @@ export async function GET(request: NextRequest) {
     // Commissie op afgeronde verkopen dit jaar / deze maand
     const commissieBinnenDitJaar = verkopenDitJaar
       .filter((v) => v.status === 'Afgerond (geld binnen)')
-      .reduce((s, v) => s + berekenCommissie(v.verkoopprijs), 0)
+      .reduce((s, v) => s + comm(v.verkoopprijs), 0)
     const commissieBinnenDezeMaand = verkopenDezeMaand
       .filter((v) => v.status === 'Afgerond (geld binnen)')
-      .reduce((s, v) => s + berekenCommissie(v.verkoopprijs), 0)
+      .reduce((s, v) => s + comm(v.verkoopprijs), 0)
+
+    // Commissie onderweg (verwacht) dit jaar / deze maand
+    const commissieOnderwegDitJaar = verkopenDitJaar
+      .filter((v) => v.status === 'Verkocht - Nog niet verzonden' || v.status === 'Onderweg')
+      .reduce((s, v) => s + comm(v.verkoopprijs), 0)
+    const commissieOnderwegDezeMaand = verkopenDezeMaand
+      .filter((v) => v.status === 'Verkocht - Nog niet verzonden' || v.status === 'Onderweg')
+      .reduce((s, v) => s + comm(v.verkoopprijs), 0)
 
     // Te betalen = som van (verkoopprijs - commissie) voor afgeronde, nog niet uitbetaalde verkopen
     const afgerondNietUitbetaald = verkopenMetWinst.filter(
       (v) => v.status === 'Afgerond (geld binnen)' && !v.uitbetaald
     )
     const teBetalen = afgerondNietUitbetaald.reduce(
-      (s, v) => s + v.verkoopprijs - berekenCommissie(v.verkoopprijs),
+      (s, v) => s + v.verkoopprijs - comm(v.verkoopprijs),
       0
     )
     const teBetalenVerkopen = afgerondNietUitbetaald.map((v) => ({
@@ -254,8 +285,8 @@ export async function GET(request: NextRequest) {
       product: v.product,
       verkoopdatum: v.verkoopdatum,
       verkoopprijs: v.verkoopprijs,
-      commissie: berekenCommissie(v.verkoopprijs),
-      teStorten: v.verkoopprijs - berekenCommissie(v.verkoopprijs),
+      commissie: comm(v.verkoopprijs),
+      teStorten: v.verkoopprijs - comm(v.verkoopprijs),
     }))
 
     // Omzet onderweg (verwacht) deze maand / dit jaar
@@ -295,6 +326,8 @@ export async function GET(request: NextRequest) {
       commissieDezeMaand,
       commissieBinnenDitJaar,
       commissieBinnenDezeMaand,
+      commissieOnderwegDitJaar,
+      commissieOnderwegDezeMaand,
       omzetBinnenDitJaar,
       omzetBinnenDezeMaand,
       omzetOnderweg,
@@ -315,7 +348,7 @@ export async function GET(request: NextRequest) {
     )
     jasmijnOpenstaand = jasmijnAfgerondNietUitbetaald.reduce(
       (s: number, v: { verkoopprijs: number }) =>
-        s + v.verkoopprijs - berekenCommissie(v.verkoopprijs),
+        s + v.verkoopprijs - comm(v.verkoopprijs),
       0
     )
   }
@@ -329,6 +362,8 @@ export async function GET(request: NextRequest) {
     omzetDitJaar,
     kostenProductDitJaar,
     commissiesDitJaar,
+    commissiesBinnenDitJaar,
+    commissiesOnderwegDitJaar,
     extraKostenDitJaar,
     geldBinnen,
     geldVerwacht,
@@ -337,6 +372,8 @@ export async function GET(request: NextRequest) {
     omzetDezeMaand,
     kostenProductDezeMaand,
     commissiesDezeMaand,
+    commissiesBinnenDezeMaand,
+    commissiesOnderwegDezeMaand,
     extraKostenDezeMaand,
     geldBinnenDezeMaand,
     geldVerwachtDezeMaand,
@@ -349,6 +386,7 @@ export async function GET(request: NextRequest) {
     winstPerAccount,
     jasmijnStats,
     jasmijnOpenstaand,
+    commissieRegels,
   })
   } catch (err) {
     console.error('Stats route error:', err)
