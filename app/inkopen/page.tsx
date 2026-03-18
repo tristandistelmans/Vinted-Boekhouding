@@ -28,7 +28,13 @@ export default function InkopenPage() {
   const [fout, setFout] = useState('')
   const vandaag = new Date().toISOString().split('T')[0]
 
-  const [form, setForm] = useState({
+  const [form, setForm] = useState<{
+    besteldatum: string
+    product: typeof PRODUCTEN[number]
+    aantal: string
+    totale_aankoopprijs: string
+    status: string
+  }>({
     besteldatum: vandaag,
     product: PRODUCTEN[0],
     aantal: '1',
@@ -236,7 +242,7 @@ export default function InkopenPage() {
               <Veld label="Product">
                 <select
                   value={form.product}
-                  onChange={(e) => { setBericht(null); setForm((p) => ({ ...p, product: e.target.value })) }}
+                  onChange={(e) => { setBericht(null); setForm((p) => ({ ...p, product: e.target.value as typeof PRODUCTEN[number] })) }}
                   className="veld-input"
                   required
                 >
