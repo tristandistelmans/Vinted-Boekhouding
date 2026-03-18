@@ -5,9 +5,9 @@ let _client: SupabaseClient | null = null
 export function getSupabase(): SupabaseClient {
   if (!_client) {
     const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-    const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+    const key = process.env.SUPABASE_SERVICE_ROLE_KEY
     if (!url || !key || url === 'jouw_supabase_url_hier') {
-      throw new Error('Supabase niet geconfigureerd. Vul .env.local in met jouw URL en key.')
+      throw new Error('Supabase niet geconfigureerd. Vul .env.local in met NEXT_PUBLIC_SUPABASE_URL en SUPABASE_SERVICE_ROLE_KEY.')
     }
     _client = createClient(url, key)
   }
