@@ -29,6 +29,7 @@ export async function PUT(
   if (body.verkoopdatum !== undefined) updateData.verkoopdatum = body.verkoopdatum
   if (body.notitie !== undefined) updateData.notitie = body.notitie || null
   if (body.uitbetaald !== undefined && !isJasmijn) updateData.uitbetaald = Boolean(body.uitbetaald)
+  if (body.account !== undefined && !isJasmijn) updateData.account = body.account
 
   const { data, error } = await supabase
     .from('verkopen')

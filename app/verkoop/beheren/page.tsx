@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react'
 import Image from 'next/image'
-import { PRODUCTEN, STATUSSEN, formatEuro, formatDatum, berekenCommissie } from '@/lib/constants'
+import { PRODUCTEN, STATUSSEN, ACCOUNTS, formatEuro, formatDatum, berekenCommissie } from '@/lib/constants'
 
 type Verkoop = {
   id: string
@@ -88,6 +88,7 @@ export default function VerkopBeheren() {
   const [prijsEdit, setPrijsEdit] = useState<{ id: string; waarde: string } | null>(null)
   const [notitieEdit, setNotitieEdit] = useState<{ id: string; waarde: string } | null>(null)
   const [uitbetaaldBezig, setUitbetaaldBezig] = useState<string | null>(null)
+  const [accountBezig, setAccountBezig] = useState<string | null>(null)
 
   const laadVerkopen = useCallback(async () => {
     setLaden(true)
@@ -182,6 +183,20 @@ export default function VerkopBeheren() {
           : v
       )
     )
+  }
+
+  async function updateAccount(id: string, account: string) {
+    setAccountBezig(id)
+    try {
+      const res = await fetch(`/api/verkopen/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ account }),
+      })
+      if (res.ok) setVerkopen((prev) => prev.map((v) => v.id === id ? { ...v, account } : v))
+    } finally {
+      setAccountBezig(null)
+    }
   }
 
   async function verwijder(id: string) {
@@ -413,7 +428,7 @@ export default function VerkopBeheren() {
                   </div>
                 </div>
 
-                {/* Status dropdown + uitbetaald toggle + delete */}
+                {/* Status dropdown + account dropdown + uitbetaald toggle + delete */}
                 <div className="flex items-center gap-1.5 pl-[46px]">
                   <select
                     value={v.status}
@@ -423,6 +438,16 @@ export default function VerkopBeheren() {
                   >
                     {STATUSSEN.map((s) => <option key={s} value={s}>{statusKort(s)}</option>)}
                   </select>
+                  {isCEO && (
+                    <select
+                      value={v.account}
+                      onChange={(e) => updateAccount(v.id, e.target.value)}
+                      disabled={accountBezig === v.id}
+                      className="text-xs bg-gray-800 border border-gray-700 rounded-xl px-2 py-2 disabled:opacity-50 appearance-none outline-none font-medium text-gray-300 shrink-0"
+                    >
+                      {ACCOUNTS.map((a) => <option key={a} value={a}>{a.split('-')[1]}</option>)}
+                    </select>
+                  )}
                   {isCEO && v.account === '3-jasmijn' && v.status === 'Afgerond (geld binnen)' && (
                     <button
                       onClick={() => toggleUitbetaald(v.id, v.uitbetaald ?? false)}
