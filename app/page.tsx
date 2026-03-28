@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { formatEuro } from '@/lib/constants'
 
 type TeBetalenVerkoop = {
@@ -84,9 +85,27 @@ export default function Dashboard() {
 
   const isJasmijn = currentUser?.isCEO === false
 
+  const router = useRouter()
+
+  async function handleLogout() {
+    await fetch('/api/auth/logout', { method: 'POST' })
+    router.push('/login')
+  }
+
   return (
     <div className="px-4 pt-6 pb-4">
-      <h1 className="text-2xl font-bold text-white mb-1">Dashboard</h1>
+      <div className="flex items-center justify-between mb-1">
+        <h1 className="text-2xl font-bold text-white">Dashboard</h1>
+        <button
+          onClick={handleLogout}
+          className="text-gray-500 hover:text-gray-300 active:text-gray-300 transition-colors p-2"
+          title="Uitloggen"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor" className="w-5 h-5">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0 0 13.5 3h-6a2.25 2.25 0 0 0-2.25 2.25v13.5A2.25 2.25 0 0 0 7.5 21h6a2.25 2.25 0 0 0 2.25-2.25V15m3 0 3-3m0 0-3-3m3 3H9" />
+          </svg>
+        </button>
+      </div>
       <p className="text-gray-500 text-sm mb-6">{huidigJaar}</p>
 
       {laden && <div className="text-center text-gray-400 py-16 text-lg">Laden...</div>}

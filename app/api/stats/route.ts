@@ -89,9 +89,13 @@ export async function GET(request: NextRequest) {
       const nieuweVerkopen = alleVerkopenArr.filter(
         (v) => v.product === product && v.status !== 'Retour ontvangen' && v.verkoopdatum > snapDatum
       ).length
+      // Returns received for sales that were already counted in the Beginsaldo snapshot
+      const retourenVoorSnap = alleVerkopenArr.filter(
+        (v) => v.product === product && v.status === 'Retour ontvangen' && v.verkoopdatum <= snapDatum
+      ).length
       return {
         product,
-        in_huis: Math.max(0, beginsaldo.aantal + nieuweInkopen - nieuweVerkopen),
+        in_huis: Math.max(0, beginsaldo.aantal + nieuweInkopen - nieuweVerkopen + retourenVoorSnap),
         onderweg,
       }
     }

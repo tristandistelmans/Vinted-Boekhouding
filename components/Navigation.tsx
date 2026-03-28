@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { usePathname, useRouter } from 'next/navigation'
+import { usePathname } from 'next/navigation'
 
 const navItems = [
   {
@@ -28,6 +28,15 @@ const navItems = [
     icon: (
       <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor" className="w-6 h-6">
         <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 6.75h12M8.25 12h12m-12 5.25h12M3.75 6.75h.007v.008H3.75V6.75Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0ZM3.75 12h.007v.008H3.75V12Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm-.375 5.25h.007v.008H3.75v-.008Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Z" />
+      </svg>
+    ),
+  },
+  {
+    href: '/verzenden',
+    label: 'Verzenden',
+    icon: (
+      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor" className="w-6 h-6">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 18.75a1.5 1.5 0 0 1-3 0m3 0a1.5 1.5 0 0 0-3 0m3 0h6m-9 0H3.375a1.125 1.125 0 0 1-1.125-1.125V14.25m17.25 4.5a1.5 1.5 0 0 1-3 0m3 0a1.5 1.5 0 0 0-3 0m3 0h1.125c.621 0 1.125-.504 1.125-1.125v-1.5c0-2.485-2.015-4.5-4.5-4.5H16.5M4.5 9.75V5.25A1.125 1.125 0 0 1 5.625 4.125h8.25A1.125 1.125 0 0 1 15 5.25v4.5m-10.5 0h10.5m-10.5 0v4.5" />
       </svg>
     ),
   },
@@ -60,24 +69,6 @@ const navItems = [
   },
 ]
 
-function LogoutButton() {
-  const router = useRouter()
-  return (
-    <button
-      onClick={async () => {
-        await fetch('/api/auth/logout', { method: 'POST' })
-        router.push('/login')
-      }}
-      className="flex-1 flex flex-col items-center gap-0.5 py-2 text-xs font-medium text-gray-600 active:text-gray-400 transition-colors"
-    >
-      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor" className="w-6 h-6">
-        <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0 0 13.5 3h-6a2.25 2.25 0 0 0-2.25 2.25v13.5A2.25 2.25 0 0 0 7.5 21h6a2.25 2.25 0 0 0 2.25-2.25V15m3 0 3-3m0 0-3-3m3 3H9" />
-      </svg>
-      <span>Uitloggen</span>
-    </button>
-  )
-}
-
 export default function Navigation() {
   const pathname = usePathname()
 
@@ -100,7 +91,6 @@ export default function Navigation() {
             </Link>
           )
         })}
-        <LogoutButton />
       </div>
     </nav>
   )

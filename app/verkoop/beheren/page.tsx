@@ -468,6 +468,13 @@ export default function VerkopBeheren() {
                   </button>
                 </div>
 
+                {/* Retour hint */}
+                {v.status === 'Retour' && (
+                  <p className="pl-[46px] text-[11px] text-orange-400/80 mt-1">
+                    Zet op &apos;Retour ontvangen&apos; als je het item terug hebt — dan wordt de voorraad hersteld.
+                  </p>
+                )}
+
                 {/* Notitie */}
                 <div className="pl-[46px] mt-1.5">
                   {notitieEdit?.id === v.id ? (

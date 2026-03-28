@@ -185,3 +185,36 @@ export function formatDatum(dateStr: string): string {
   const d = new Date(dateStr)
   return d.toLocaleDateString('nl-NL', { day: '2-digit', month: '2-digit', year: 'numeric' })
 }
+
+export function berekenDeadline(verkoopdatum: string): {
+  deadline: Date
+  dagenOver: number
+  isUrgent: boolean
+  isVerlopen: boolean
+} {
+  const start = new Date(verkoopdatum)
+  let werkdagen = 0
+  const current = new Date(start)
+
+  while (werkdagen < 5) {
+    current.setDate(current.getDate() + 1)
+    const dag = current.getDay()
+    if (dag !== 0 && dag !== 6) {
+      werkdagen++
+    }
+  }
+
+  const nu = new Date()
+  nu.setHours(0, 0, 0, 0)
+  current.setHours(0, 0, 0, 0)
+
+  const verschilMs = current.getTime() - nu.getTime()
+  const dagenOver = Math.ceil(verschilMs / (1000 * 60 * 60 * 24))
+
+  return {
+    deadline: current,
+    dagenOver,
+    isUrgent: dagenOver >= 0 && dagenOver <= 1,
+    isVerlopen: dagenOver < 0,
+  }
+}
