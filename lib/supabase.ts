@@ -32,6 +32,28 @@ export type Verkoop = {
   created_at: string
   winst?: number | null
   aankoopprijs?: number
+  bron?: string
+  vinted_transaction_id?: string | null
+  notitie?: string | null
+}
+
+export type EmailIngestie = {
+  id: string
+  gmail_message_id: string
+  ontvangen_op: string
+  mail_type: 'verkoop' | 'verzendlabel' | 'afgerond' | 'retour' | 'onbekend'
+  account: string | null
+  vinted_transaction_id: string | null
+  raw_subject: string
+  raw_from: string
+  parsed_data: Record<string, unknown> | null
+  is_bundel: boolean
+  bundel_aantal: number | null
+  status: 'pending' | 'auto-applied' | 'approved' | 'rejected' | 'error'
+  verkoop_id: string | null
+  foutmelding: string | null
+  verwerkt_op: string | null
+  created_at: string
 }
 
 export type Inkoop = {

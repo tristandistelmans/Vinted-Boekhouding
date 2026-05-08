@@ -31,6 +31,19 @@ export default function InstellingenPage() {
   const [commOpslaan, setCommOpslaan] = useState(false)
   const [commBericht, setCommBericht] = useState<{ ok: boolean; tekst: string } | null>(null)
 
+  // Gmail sync state
+  const [gmailAutoMode, setGmailAutoMode] = useState(false)
+  const [gmailLaatsteSync, setGmailLaatsteSync] = useState<string | null>(null)
+  const [gmailToggleBezig, setGmailToggleBezig] = useState(false)
+  const [gmailSyncBezig, setGmailSyncBezig] = useState(false)
+  const [gmailSyncResultaat, setGmailSyncResultaat] = useState<{
+    autoApplied: number
+    pending: number
+    errors: number
+    perType?: Record<string, number>
+  } | null>(null)
+  const [gmailSyncFout, setGmailSyncFout] = useState<string | null>(null)
+
   useEffect(() => {
     fetch('/api/instellingen')
       .then((r) => r.json())
@@ -42,9 +55,46 @@ export default function InstellingenPage() {
         if (map.commissie_regels) {
           try { setCommRegels({ ...DEFAULT_REGELS, ...JSON.parse(map.commissie_regels) }) } catch { /* gebruik default */ }
         }
+        if (map.gmail_auto_mode) setGmailAutoMode(map.gmail_auto_mode === 'true')
+        if (map.gmail_laatste_sync) setGmailLaatsteSync(map.gmail_laatste_sync)
       })
       .catch(() => {})
   }, [])
+
+  async function toggleGmailAutoMode() {
+    const nieuw = !gmailAutoMode
+    setGmailToggleBezig(true)
+    try {
+      const res = await fetch('/api/instellingen', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sleutel: 'gmail_auto_mode', waarde: nieuw ? 'true' : 'false' }),
+      })
+      if (res.ok) setGmailAutoMode(nieuw)
+    } finally {
+      setGmailToggleBezig(false)
+    }
+  }
+
+  async function handleGmailSyncNu() {
+    setGmailSyncBezig(true)
+    setGmailSyncResultaat(null)
+    setGmailSyncFout(null)
+    try {
+      // Roept de eigen sync route aan; maar die vereist CRON_SECRET — server-side proxy
+      const res = await fetch('/api/gmail/manual-sync', { method: 'POST' })
+      const data = await res.json()
+      if (!res.ok) setGmailSyncFout(data.error || 'Sync mislukt')
+      else {
+        setGmailSyncResultaat(data)
+        if (data.nieuwsteOntvangenOp) setGmailLaatsteSync(data.nieuwsteOntvangenOp)
+      }
+    } catch {
+      setGmailSyncFout('Verbindingsfout bij Gmail-sync')
+    } finally {
+      setGmailSyncBezig(false)
+    }
+  }
 
   async function handleCommOpslaaan() {
     setCommOpslaan(true)
@@ -156,7 +206,7 @@ export default function InstellingenPage() {
             <p className="font-medium text-gray-300">Stappen:</p>
             <ol className="list-decimal list-inside space-y-0.5">
               <li>Open de <span className="text-white font-medium">Resoled Token Tool</span> Chrome extensie op Vinted</li>
-              <li>Klik "Copy" of kopieer de volledige output</li>
+              <li>Klik &quot;Copy&quot; of kopieer de volledige output</li>
               <li>Plak hieronder en klik Opslaan</li>
             </ol>
             <p className="text-gray-500 pt-1">
@@ -249,6 +299,81 @@ export default function InstellingenPage() {
           )}
         </section>
 
+        {/* Gmail-automatisering */}
+        <section className="bg-gray-900 rounded-xl p-4 space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="font-semibold text-gray-200">Gmail automatisering</h2>
+            {gmailLaatsteSync && (
+              <span className="text-xs text-gray-500">
+                Laatste sync: {formatSyncTijd(gmailLaatsteSync)}
+              </span>
+            )}
+          </div>
+
+          <p className="text-xs text-gray-400">
+            Vinted-mails worden elke ~5 min binnengehaald (cron-job.org). Verkoop-mails creëren
+            nieuwe verkopen, verzendlabel zet de status op &apos;Onderweg&apos;, en afgerond-mails sluiten
+            de bestelling af.
+          </p>
+
+          <div className="flex items-center justify-between bg-gray-800 rounded-lg p-3">
+            <div>
+              <p className="text-sm text-gray-200 font-medium">Auto-mode</p>
+              <p className="text-xs text-gray-500">
+                {gmailAutoMode
+                  ? 'Single-item verkopen worden direct toegevoegd. Bundels gaan naar Inbox.'
+                  : 'Alle verkopen wachten op je goedkeuring in Inbox.'}
+              </p>
+            </div>
+            <button
+              onClick={toggleGmailAutoMode}
+              disabled={gmailToggleBezig}
+              role="switch"
+              aria-checked={gmailAutoMode}
+              className={`relative w-12 h-7 rounded-full transition-colors ${
+                gmailAutoMode ? 'bg-emerald-600' : 'bg-gray-700'
+              } disabled:opacity-50`}
+            >
+              <span
+                className={`absolute top-0.5 w-6 h-6 bg-white rounded-full transition-transform ${
+                  gmailAutoMode ? 'translate-x-5' : 'translate-x-0.5'
+                }`}
+              />
+            </button>
+          </div>
+
+          <button
+            onClick={handleGmailSyncNu}
+            disabled={gmailSyncBezig}
+            className="w-full bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-medium rounded-lg py-2 text-sm transition-colors"
+          >
+            {gmailSyncBezig ? 'Synchroniseren...' : 'Sync nu (handmatig)'}
+          </button>
+
+          {gmailSyncResultaat && (
+            <div className="bg-emerald-900/30 border border-emerald-700 rounded-lg p-3 space-y-1 text-sm">
+              <p className="text-emerald-300 font-medium">Sync klaar</p>
+              <p className="text-gray-300">
+                {gmailSyncResultaat.autoApplied} auto · {gmailSyncResultaat.pending} pending ·{' '}
+                {gmailSyncResultaat.errors} fout(en)
+              </p>
+              {gmailSyncResultaat.perType && (
+                <p className="text-xs text-gray-400">
+                  {Object.entries(gmailSyncResultaat.perType)
+                    .map(([k, v]) => `${k}: ${v}`)
+                    .join(' · ')}
+                </p>
+              )}
+            </div>
+          )}
+
+          {gmailSyncFout && (
+            <div className="bg-red-900/30 border border-red-700 rounded-lg p-3">
+              <p className="text-sm text-red-300">{gmailSyncFout}</p>
+            </div>
+          )}
+        </section>
+
         {/* Commissie regels Jasmijn */}
         <section className="bg-gray-900 rounded-xl p-4 space-y-4">
           <h2 className="font-semibold text-gray-200">Commissie Jasmijn</h2>
@@ -301,7 +426,7 @@ export default function InstellingenPage() {
           <h2 className="font-semibold text-gray-200 text-sm">Info</h2>
           <ul className="text-xs text-gray-400 space-y-1 list-disc list-inside">
             <li>Productnamen worden herkend via de listing-titel (keyword matching)</li>
-            <li>Niet-herkende producten verschijnen als "Onbekend" — corrigeerbaar in Bestellingen</li>
+            <li>Niet-herkende producten verschijnen als &quot;Onbekend&quot; — corrigeerbaar in Bestellingen</li>
             <li>Handmatig ingevoerde verkopen worden nooit overschreven</li>
             <li>Account 2 (disteltr) kan later worden toegevoegd</li>
           </ul>

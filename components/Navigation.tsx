@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
+import { useEffect, useState } from 'react'
 
 const navItems = [
   {
@@ -69,25 +70,64 @@ const navItems = [
   },
 ]
 
+const inboxItem = {
+  href: '/inbox',
+  label: 'Inbox',
+  icon: (
+    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor" className="w-6 h-6">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M21.75 9v.906a2.25 2.25 0 0 1-1.183 1.981l-6.478 3.488M2.25 9v.906a2.25 2.25 0 0 0 1.183 1.981l6.478 3.488m8.839 2.51-4.66-2.51m0 0-1.023-.55a2.25 2.25 0 0 0-2.134 0l-1.022.55m0 0-4.661 2.51m16.5 1.615a2.25 2.25 0 0 1-2.25 2.25h-15a2.25 2.25 0 0 1-2.25-2.25V8.844a2.25 2.25 0 0 1 1.183-1.981l7.5-4.039a2.25 2.25 0 0 1 2.134 0l7.5 4.039a2.25 2.25 0 0 1 1.183 1.981V19.5Z" />
+    </svg>
+  ),
+}
+
 export default function Navigation() {
   const pathname = usePathname()
+  const [pendingCount, setPendingCount] = useState<number>(0)
+
+  useEffect(() => {
+    let cancelled = false
+    async function poll() {
+      try {
+        const res = await fetch('/api/gmail/queue', { cache: 'no-store' })
+        if (!res.ok) return
+        const data = await res.json()
+        if (!cancelled) setPendingCount(data.items?.length || 0)
+      } catch {
+        // stilzwijgend negeren
+      }
+    }
+    poll()
+    const t = setInterval(poll, 60_000)
+    return () => {
+      cancelled = true
+      clearInterval(t)
+    }
+  }, [])
+
+  const allItems = pendingCount > 0 ? [...navItems, inboxItem] : navItems
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-50 bg-gray-900 border-t border-gray-700 pb-safe">
       <div className="flex">
-        {navItems.map((item) => {
+        {allItems.map((item) => {
           const isActive =
             item.href === '/' ? pathname === '/' : pathname.startsWith(item.href)
+          const isInbox = item.href === '/inbox'
           return (
             <Link
               key={item.href}
               href={item.href}
-              className={`flex-1 flex flex-col items-center gap-0.5 py-2 text-xs font-medium transition-colors ${
+              className={`flex-1 flex flex-col items-center gap-0.5 py-2 text-xs font-medium transition-colors relative ${
                 isActive ? 'text-blue-400' : 'text-gray-500 active:text-gray-300'
               }`}
             >
               {item.icon}
               <span>{item.label}</span>
+              {isInbox && pendingCount > 0 && (
+                <span className="absolute top-1 right-1/2 translate-x-3 bg-red-500 text-white text-[10px] font-bold rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1">
+                  {pendingCount > 99 ? '99+' : pendingCount}
+                </span>
+              )}
             </Link>
           )
         })}
