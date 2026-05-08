@@ -78,7 +78,7 @@ export default function VerkopBeheren() {
   const [isCEO, setIsCEO] = useState(true)
   const [laden, setLaden] = useState(true)
   const [fout, setFout] = useState('')
-  const [filterStatus, setFilterStatus] = useState('alle')
+  const [filterStatus, setFilterStatus] = useState('actief')
   const [filterProduct, setFilterProduct] = useState('alle')
   const [filterMaand, setFilterMaand] = useState('alle')
   const [zoekterm, setZoekterm] = useState('')

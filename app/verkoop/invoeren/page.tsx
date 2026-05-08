@@ -3,13 +3,22 @@
 import { useEffect, useState } from 'react'
 import { PRODUCTEN, STATUSSEN, CEO_ACCOUNTS } from '@/lib/constants'
 
+type ProductRegel = {
+  id: string
+  product: string
+}
+
+function nieuweRegel(): ProductRegel {
+  return { id: crypto.randomUUID(), product: PRODUCTEN[0] }
+}
+
 export default function VerkopInvoeren() {
   const vandaag = new Date().toISOString().split('T')[0]
   const [isCEO, setIsCEO] = useState<boolean | null>(null)
 
+  const [regels, setRegels] = useState<ProductRegel[]>([nieuweRegel()])
   const [form, setForm] = useState({
     verkoopdatum: vandaag,
-    product: PRODUCTEN[0],
     naam_koper: '',
     verkoopprijs: '50',
     status: 'Verkocht - Nog niet verzonden',
@@ -30,34 +39,93 @@ export default function VerkopInvoeren() {
     setBericht(null)
   }
 
+  function updateRegel(id: string, product: string) {
+    setRegels((prev) => prev.map((r) => (r.id === id ? { ...r, product } : r)))
+    setBericht(null)
+  }
+
+  function voegRegelToe() {
+    setRegels((prev) => [...prev, nieuweRegel()])
+    setBericht(null)
+  }
+
+  function verwijderRegel(id: string) {
+    setRegels((prev) => (prev.length > 1 ? prev.filter((r) => r.id !== id) : prev))
+    setBericht(null)
+  }
+
+  function resetForm() {
+    setRegels([nieuweRegel()])
+    setForm({
+      verkoopdatum: vandaag,
+      naam_koper: '',
+      verkoopprijs: '50',
+      status: 'Verkocht - Nog niet verzonden',
+      account: CEO_ACCOUNTS[0],
+      notitie: '',
+    })
+  }
+
+  // Verdeel totaal eerlijk over N regels: alle regels krijgen totaal/N (op cent),
+  // afrondingsrest gaat naar de laatste regel zodat de som exact klopt.
+  function verdeelPrijs(totaal: number, aantal: number): number[] {
+    const totaalCent = Math.round(totaal * 100)
+    const basisCent = Math.floor(totaalCent / aantal)
+    const restCent = totaalCent - basisCent * aantal
+    const prijzen = Array(aantal).fill(basisCent / 100)
+    prijzen[aantal - 1] = (basisCent + restCent) / 100
+    return prijzen
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setBezig(true)
     setBericht(null)
 
-    // Voor Jasmijn: account wordt server-side ingesteld; stuur gewoon mee
-    const body = isCEO ? form : { ...form, account: '3-jasmijn' }
+    const totaal = Number(form.verkoopprijs)
+    if (!(totaal > 0)) {
+      setBericht({ type: 'fout', tekst: 'Vul een geldige verkoopprijs in' })
+      setBezig(false)
+      return
+    }
+
+    const prijzen = verdeelPrijs(totaal, regels.length)
+    const isBundel = regels.length > 1
+    const account = isCEO ? form.account : '3-jasmijn'
+    const notitiePrefix = isBundel ? `Bundel: ${regels.length} items` : ''
+    const notitie = [notitiePrefix, form.notitie].filter(Boolean).join(' — ')
 
     try {
-      const res = await fetch('/api/verkopen', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      })
-      const data = await res.json()
+      const resultaten = await Promise.all(
+        regels.map((regel, i) =>
+          fetch('/api/verkopen', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              verkoopdatum: form.verkoopdatum,
+              product: regel.product,
+              naam_koper: form.naam_koper,
+              verkoopprijs: prijzen[i],
+              status: form.status,
+              account,
+              notitie,
+            }),
+          }).then(async (res) => ({ ok: res.ok, data: await res.json() }))
+        )
+      )
 
-      if (!res.ok) {
-        setBericht({ type: 'fout', tekst: data.error || 'Er ging iets mis' })
+      const gefaald = resultaten.filter((r) => !r.ok)
+      if (gefaald.length === 0) {
+        const omschrijving = isBundel
+          ? `Bundel van ${regels.length} items toegevoegd voor €${totaal.toFixed(2)}`
+          : `Verkoop toegevoegd! ${regels[0].product} voor €${totaal.toFixed(2)}`
+        setBericht({ type: 'succes', tekst: omschrijving })
+        resetForm()
       } else {
-        setBericht({ type: 'succes', tekst: `Verkoop toegevoegd! ${form.product} voor €${form.verkoopprijs}` })
-        setForm({
-          verkoopdatum: vandaag,
-          product: PRODUCTEN[0],
-          naam_koper: '',
-          verkoopprijs: '50',
-          status: 'Verkocht - Nog niet verzonden',
-          account: CEO_ACCOUNTS[0],
-          notitie: '',
+        const fout = gefaald[0].data?.error || 'Er ging iets mis'
+        setBericht({
+          type: 'fout',
+          tekst: `${resultaten.length - gefaald.length} van ${resultaten.length} toegevoegd. Fout: ${fout}`,
         })
       }
     } catch {
@@ -66,6 +134,10 @@ export default function VerkopInvoeren() {
       setBezig(false)
     }
   }
+
+  const prijsPerPet = Number(form.verkoopprijs) > 0 && regels.length > 1
+    ? (Number(form.verkoopprijs) / regels.length).toFixed(2)
+    : null
 
   return (
     <div className="px-4 pt-6 pb-4">
@@ -94,20 +166,48 @@ export default function VerkopInvoeren() {
           />
         </Veld>
 
-        <Veld label="Product">
-          <select
-            value={form.product}
-            onChange={(e) => updateForm('product', e.target.value)}
-            className="veld-input"
-            required
-          >
-            {PRODUCTEN.map((p) => (
-              <option key={p} value={p}>
-                {p}
-              </option>
+        <div className="space-y-1.5">
+          <div className="flex items-center justify-between">
+            <label className="text-gray-400 text-sm font-medium">
+              {regels.length > 1 ? `Producten (${regels.length})` : 'Product'}
+            </label>
+            <button
+              type="button"
+              onClick={voegRegelToe}
+              className="text-blue-400 text-sm font-medium active:text-blue-500"
+            >
+              + Pet toevoegen
+            </button>
+          </div>
+          <div className="space-y-2">
+            {regels.map((regel) => (
+              <div key={regel.id} className="flex gap-2">
+                <select
+                  value={regel.product}
+                  onChange={(e) => updateRegel(regel.id, e.target.value)}
+                  className="veld-input flex-1"
+                  required
+                >
+                  {PRODUCTEN.map((p) => (
+                    <option key={p} value={p}>
+                      {p}
+                    </option>
+                  ))}
+                </select>
+                {regels.length > 1 && (
+                  <button
+                    type="button"
+                    onClick={() => verwijderRegel(regel.id)}
+                    aria-label="Regel verwijderen"
+                    className="px-4 rounded-xl bg-gray-800 border border-gray-700 text-gray-400 active:bg-gray-700"
+                  >
+                    −
+                  </button>
+                )}
+              </div>
             ))}
-          </select>
-        </Veld>
+          </div>
+        </div>
 
         <Veld label="Naam koper (Vinted)">
           <input
@@ -122,7 +222,7 @@ export default function VerkopInvoeren() {
           />
         </Veld>
 
-        <Veld label="Verkoopprijs (€)">
+        <Veld label={regels.length > 1 ? 'Totale verkoopprijs (€)' : 'Verkoopprijs (€)'}>
           <input
             type="number"
             value={form.verkoopprijs}
@@ -134,6 +234,9 @@ export default function VerkopInvoeren() {
             step="0.01"
             inputMode="decimal"
           />
+          {prijsPerPet && (
+            <p className="text-gray-500 text-xs mt-1">≈ €{prijsPerPet} per pet</p>
+          )}
         </Veld>
 
         <Veld label="Status">
@@ -185,7 +288,7 @@ export default function VerkopInvoeren() {
           disabled={bezig}
           className="w-full py-4 rounded-xl bg-blue-600 text-white text-lg font-semibold disabled:opacity-50 active:bg-blue-700 transition-colors mt-2"
         >
-          {bezig ? 'Bezig...' : 'Toevoegen'}
+          {bezig ? 'Bezig...' : regels.length > 1 ? `Bundel toevoegen (${regels.length})` : 'Toevoegen'}
         </button>
       </form>
 

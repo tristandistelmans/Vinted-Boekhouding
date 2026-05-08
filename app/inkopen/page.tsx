@@ -20,6 +20,16 @@ type ExtraKost = {
   bedrag: number
 }
 
+type BulkRegel = {
+  id: string
+  product: string
+  aantal: string
+}
+
+function nieuweBulkRegel(): BulkRegel {
+  return { id: crypto.randomUUID(), product: PRODUCTEN[0], aantal: '1' }
+}
+
 export default function InkopenPage() {
   const [inkopen, setInkopen] = useState<Inkoop[]>([])
   const [extraKosten, setExtraKosten] = useState<ExtraKost[]>([])
@@ -46,6 +56,13 @@ export default function InkopenPage() {
   const [bericht, setBericht] = useState<{ type: 'succes' | 'fout'; tekst: string } | null>(null)
   const [kostBericht, setKostBericht] = useState<{ type: 'succes' | 'fout'; tekst: string } | null>(null)
   const [tabblad, setTabblad] = useState<'inkoop' | 'extra-kosten'>('inkoop')
+  const [inkoopModus, setInkoopModus] = useState<'enkel' | 'bulk'>('bulk')
+  const [bulkRegels, setBulkRegels] = useState<BulkRegel[]>([nieuweBulkRegel()])
+  const [bulkForm, setBulkForm] = useState({
+    besteldatum: vandaag,
+    totale_aankoopprijs: '',
+    status: 'Onderweg',
+  })
   const [bewerkInkoop, setBewerkInkoop] = useState<Inkoop | null>(null)
   const [verwijderInkoop, setVerwijderInkoop] = useState<string | null>(null)
 
@@ -106,6 +123,101 @@ export default function InkopenPage() {
           aantal: '1',
           totale_aankoopprijs: '',
           status: 'Onderweg',
+        })
+        laadData()
+      }
+    } catch {
+      setBericht({ type: 'fout', tekst: 'Kon verbinding niet maken' })
+    } finally {
+      setBezig(false)
+    }
+  }
+
+  function updateBulkRegel(id: string, key: 'product' | 'aantal', value: string) {
+    setBulkRegels((prev) => prev.map((r) => (r.id === id ? { ...r, [key]: value } : r)))
+    setBericht(null)
+  }
+
+  function voegBulkRegelToe() {
+    setBulkRegels((prev) => [...prev, nieuweBulkRegel()])
+    setBericht(null)
+  }
+
+  function verwijderBulkRegel(id: string) {
+    setBulkRegels((prev) => (prev.length > 1 ? prev.filter((r) => r.id !== id) : prev))
+    setBericht(null)
+  }
+
+  function updateBulkForm(key: keyof typeof bulkForm, value: string) {
+    setBulkForm((prev) => ({ ...prev, [key]: value }))
+    setBericht(null)
+  }
+
+  const bulkTotaalAantal = bulkRegels.reduce((som, r) => som + (Number(r.aantal) || 0), 0)
+  const bulkPrijsPerStuk =
+    bulkTotaalAantal > 0 && Number(bulkForm.totale_aankoopprijs) > 0
+      ? Number(bulkForm.totale_aankoopprijs) / bulkTotaalAantal
+      : null
+
+  async function handleBulkSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    setBezig(true)
+    setBericht(null)
+
+    const aantallen = bulkRegels.map((r) => Number(r.aantal))
+    if (aantallen.some((a) => !(a > 0) || !Number.isFinite(a))) {
+      setBericht({ type: 'fout', tekst: 'Vul voor elke regel een geldig aantal in' })
+      setBezig(false)
+      return
+    }
+
+    const totaal = Number(bulkForm.totale_aankoopprijs)
+    if (!(totaal > 0)) {
+      setBericht({ type: 'fout', tekst: 'Vul een geldige totaalprijs in' })
+      setBezig(false)
+      return
+    }
+
+    const totaalAantal = aantallen.reduce((s, n) => s + n, 0)
+    const prijsPerStuk = totaal / totaalAantal
+
+    // Verdeel totaal exact op cent: rest gaat naar laatste regel zodat de som klopt.
+    const totaalCent = Math.round(totaal * 100)
+    const regelCenten = aantallen.map((a) => Math.round(a * prijsPerStuk * 100))
+    const restCent = totaalCent - regelCenten.reduce((s, n) => s + n, 0)
+    if (regelCenten.length > 0) regelCenten[regelCenten.length - 1] += restCent
+
+    try {
+      const resultaten = await Promise.all(
+        bulkRegels.map((regel, i) =>
+          fetch('/api/inkopen', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              besteldatum: bulkForm.besteldatum,
+              product: regel.product,
+              aantal: aantallen[i],
+              totale_aankoopprijs: regelCenten[i] / 100,
+              status: bulkForm.status,
+            }),
+          }).then(async (res) => ({ ok: res.ok, data: await res.json() }))
+        )
+      )
+
+      const gefaald = resultaten.filter((r) => !r.ok)
+      if (gefaald.length === 0) {
+        setBericht({
+          type: 'succes',
+          tekst: `${totaalAantal} stuks (${bulkRegels.length} producten) toegevoegd!`,
+        })
+        setBulkRegels([nieuweBulkRegel()])
+        setBulkForm({ besteldatum: vandaag, totale_aankoopprijs: '', status: 'Onderweg' })
+        laadData()
+      } else {
+        const fout = gefaald[0].data?.error || 'Er ging iets mis'
+        setBericht({
+          type: 'fout',
+          tekst: `${resultaten.length - gefaald.length} van ${resultaten.length} regels toegevoegd. Fout: ${fout}`,
         })
         laadData()
       }
@@ -228,81 +340,219 @@ export default function InkopenPage() {
           )}
 
           {isCEO && (
-            <form onSubmit={handleSubmit} className="space-y-4 mb-8">
-              <Veld label="Besteldatum">
-                <input
-                  type="date"
-                  value={form.besteldatum}
-                  onChange={(e) => { setBericht(null); setForm((p) => ({ ...p, besteldatum: e.target.value })) }}
-                  className="veld-input"
-                  required
-                />
-              </Veld>
-
-              <Veld label="Product">
-                <select
-                  value={form.product}
-                  onChange={(e) => { setBericht(null); setForm((p) => ({ ...p, product: e.target.value as typeof PRODUCTEN[number] })) }}
-                  className="veld-input"
-                  required
+            <div className="mb-8">
+              {/* Modus-toggle: meerdere producten vs één product */}
+              <div className="flex gap-1 mb-5 bg-gray-800 rounded-xl p-1">
+                <button
+                  type="button"
+                  onClick={() => { setInkoopModus('bulk'); setBericht(null) }}
+                  className={`flex-1 py-2.5 rounded-lg text-xs font-medium transition-colors ${
+                    inkoopModus === 'bulk' ? 'bg-blue-600 text-white' : 'text-gray-400'
+                  }`}
                 >
-                  {PRODUCTEN.map((p) => (
-                    <option key={p} value={p}>{p}</option>
-                  ))}
-                </select>
-              </Veld>
+                  Meerdere producten
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setInkoopModus('enkel'); setBericht(null) }}
+                  className={`flex-1 py-2.5 rounded-lg text-xs font-medium transition-colors ${
+                    inkoopModus === 'enkel' ? 'bg-blue-600 text-white' : 'text-gray-400'
+                  }`}
+                >
+                  Eén product
+                </button>
+              </div>
 
-              <Veld label="Aantal stuks">
-                <input
-                  type="number"
-                  value={form.aantal}
-                  onChange={(e) => { setBericht(null); setForm((p) => ({ ...p, aantal: e.target.value })) }}
-                  className="veld-input"
-                  required
-                  min="1"
-                  inputMode="numeric"
-                />
-              </Veld>
+              {inkoopModus === 'bulk' && (
+                <form onSubmit={handleBulkSubmit} className="space-y-4">
+                  <Veld label="Besteldatum">
+                    <input
+                      type="date"
+                      value={bulkForm.besteldatum}
+                      onChange={(e) => updateBulkForm('besteldatum', e.target.value)}
+                      className="veld-input"
+                      required
+                    />
+                  </Veld>
 
-              <Veld label="Totale aankoopprijs (€)">
-                <input
-                  type="number"
-                  value={form.totale_aankoopprijs}
-                  onChange={(e) => { setBericht(null); setForm((p) => ({ ...p, totale_aankoopprijs: e.target.value })) }}
-                  placeholder="0.00"
-                  className="veld-input"
-                  min="0"
-                  step="0.01"
-                  inputMode="decimal"
-                />
-              </Veld>
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <label className="text-gray-400 text-sm font-medium">
+                        Producten ({bulkRegels.length})
+                      </label>
+                      <button
+                        type="button"
+                        onClick={voegBulkRegelToe}
+                        className="text-blue-400 text-sm font-medium active:text-blue-500"
+                      >
+                        + Product toevoegen
+                      </button>
+                    </div>
+                    <div className="space-y-2">
+                      {bulkRegels.map((regel) => (
+                        <div key={regel.id} className="flex gap-2">
+                          <select
+                            value={regel.product}
+                            onChange={(e) => updateBulkRegel(regel.id, 'product', e.target.value)}
+                            className="veld-input flex-1"
+                            required
+                          >
+                            {PRODUCTEN.map((p) => (
+                              <option key={p} value={p}>{p}</option>
+                            ))}
+                          </select>
+                          <input
+                            type="number"
+                            value={regel.aantal}
+                            onChange={(e) => updateBulkRegel(regel.id, 'aantal', e.target.value)}
+                            className="veld-input"
+                            style={{ width: '5rem' }}
+                            min="1"
+                            inputMode="numeric"
+                            required
+                            aria-label="Aantal"
+                          />
+                          {bulkRegels.length > 1 && (
+                            <button
+                              type="button"
+                              onClick={() => verwijderBulkRegel(regel.id)}
+                              aria-label="Regel verwijderen"
+                              className="px-4 rounded-xl bg-gray-800 border border-gray-700 text-gray-400 active:bg-gray-700"
+                            >
+                              −
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
 
-              {prijsPerStuk !== '—' && (
-                <p className="text-gray-400 text-sm px-1">
-                  Prijs per stuk: <span className="text-white font-medium">€{prijsPerStuk}</span>
-                </p>
+                  <Veld label="Totale aankoopprijs (€)">
+                    <input
+                      type="number"
+                      value={bulkForm.totale_aankoopprijs}
+                      onChange={(e) => updateBulkForm('totale_aankoopprijs', e.target.value)}
+                      placeholder="0.00"
+                      className="veld-input"
+                      min="0"
+                      step="0.01"
+                      inputMode="decimal"
+                      required
+                    />
+                  </Veld>
+
+                  <div className="bg-gray-800/60 rounded-xl px-4 py-3 text-sm flex items-center justify-between">
+                    <span className="text-gray-400">
+                      Totaal: <span className="text-white font-medium">{bulkTotaalAantal} stuks</span>
+                    </span>
+                    <span className="text-gray-400">
+                      Per stuk:{' '}
+                      <span className="text-white font-medium">
+                        {bulkPrijsPerStuk !== null ? `€${bulkPrijsPerStuk.toFixed(2)}` : '—'}
+                      </span>
+                    </span>
+                  </div>
+
+                  <Veld label="Status">
+                    <select
+                      value={bulkForm.status}
+                      onChange={(e) => updateBulkForm('status', e.target.value)}
+                      className="veld-input"
+                      required
+                    >
+                      <option value="Onderweg">Onderweg</option>
+                      <option value="In Huis">In Huis</option>
+                    </select>
+                  </Veld>
+
+                  <button
+                    type="submit"
+                    disabled={bezig}
+                    className="w-full py-4 rounded-xl bg-blue-600 text-white text-lg font-semibold disabled:opacity-50 active:bg-blue-700 transition-colors"
+                  >
+                    {bezig ? 'Bezig...' : `${bulkTotaalAantal || 0} stuks toevoegen`}
+                  </button>
+                </form>
               )}
 
-              <Veld label="Status">
-                <select
-                  value={form.status}
-                  onChange={(e) => { setBericht(null); setForm((p) => ({ ...p, status: e.target.value })) }}
-                  className="veld-input"
-                  required
-                >
-                  <option value="Onderweg">Onderweg</option>
-                  <option value="In Huis">In Huis</option>
-                </select>
-              </Veld>
+              {inkoopModus === 'enkel' && (
+                <form onSubmit={handleSubmit} className="space-y-4">
+                  <Veld label="Besteldatum">
+                    <input
+                      type="date"
+                      value={form.besteldatum}
+                      onChange={(e) => { setBericht(null); setForm((p) => ({ ...p, besteldatum: e.target.value })) }}
+                      className="veld-input"
+                      required
+                    />
+                  </Veld>
 
-              <button
-                type="submit"
-                disabled={bezig}
-                className="w-full py-4 rounded-xl bg-blue-600 text-white text-lg font-semibold disabled:opacity-50 active:bg-blue-700 transition-colors"
-              >
-                {bezig ? 'Bezig...' : 'Toevoegen'}
-              </button>
-            </form>
+                  <Veld label="Product">
+                    <select
+                      value={form.product}
+                      onChange={(e) => { setBericht(null); setForm((p) => ({ ...p, product: e.target.value as typeof PRODUCTEN[number] })) }}
+                      className="veld-input"
+                      required
+                    >
+                      {PRODUCTEN.map((p) => (
+                        <option key={p} value={p}>{p}</option>
+                      ))}
+                    </select>
+                  </Veld>
+
+                  <Veld label="Aantal stuks">
+                    <input
+                      type="number"
+                      value={form.aantal}
+                      onChange={(e) => { setBericht(null); setForm((p) => ({ ...p, aantal: e.target.value })) }}
+                      className="veld-input"
+                      required
+                      min="1"
+                      inputMode="numeric"
+                    />
+                  </Veld>
+
+                  <Veld label="Totale aankoopprijs (€)">
+                    <input
+                      type="number"
+                      value={form.totale_aankoopprijs}
+                      onChange={(e) => { setBericht(null); setForm((p) => ({ ...p, totale_aankoopprijs: e.target.value })) }}
+                      placeholder="0.00"
+                      className="veld-input"
+                      min="0"
+                      step="0.01"
+                      inputMode="decimal"
+                    />
+                  </Veld>
+
+                  {prijsPerStuk !== '—' && (
+                    <p className="text-gray-400 text-sm px-1">
+                      Prijs per stuk: <span className="text-white font-medium">€{prijsPerStuk}</span>
+                    </p>
+                  )}
+
+                  <Veld label="Status">
+                    <select
+                      value={form.status}
+                      onChange={(e) => { setBericht(null); setForm((p) => ({ ...p, status: e.target.value })) }}
+                      className="veld-input"
+                      required
+                    >
+                      <option value="Onderweg">Onderweg</option>
+                      <option value="In Huis">In Huis</option>
+                    </select>
+                  </Veld>
+
+                  <button
+                    type="submit"
+                    disabled={bezig}
+                    className="w-full py-4 rounded-xl bg-blue-600 text-white text-lg font-semibold disabled:opacity-50 active:bg-blue-700 transition-colors"
+                  >
+                    {bezig ? 'Bezig...' : 'Toevoegen'}
+                  </button>
+                </form>
+              )}
+            </div>
           )}
 
           {/* Recente inkopen */}
