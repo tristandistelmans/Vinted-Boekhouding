@@ -210,13 +210,12 @@ async function verwerkParse(
 
   if (parsed.type === 'verzendlabel') {
     if (!parsed.transactionId) {
-      await updateLog({ status: 'error', foutmelding: 'verzendlabel mist transactie-ID' })
-      stats.errors++
+      await updateLog({ status: 'rejected', foutmelding: 'verzendlabel mist transactie-ID' })
       return
     }
 
-    // Stap 1: zoek verkoop met deze transactie-id (al bekend)
-    let verkoopId: string | null = null
+    // Match alléén op tx_id (voor verkopen die via Gmail-flow zijn aangekomen).
+    // Geen FIFO-fallback: dat geeft te vaak verkeerde matches voor handmatige verkopen.
     const { data: bestaand } = await supabase
       .from('verkopen')
       .select('id')
@@ -224,10 +223,8 @@ async function verwerkParse(
       .maybeSingle()
 
     if (bestaand) {
-      verkoopId = bestaand.id
       // Verzendlabel = label aangemaakt op Vinted, NIET fysiek verzonden.
-      // Status blijft 'Verkocht - Nog niet verzonden' tot Tristan handmatig op 'Onderweg' zet
-      // (Verzenden-tab) of tot een afgerond-mail binnenkomt.
+      // Status blijft 'Verkocht - Nog niet verzonden'. Eventueel canonieke product-naam invullen.
       await supabase
         .from('verkopen')
         .update(
@@ -235,64 +232,25 @@ async function verwerkParse(
             ? { product: parsed.productMapped }
             : {}
         )
-        .eq('id', verkoopId)
-    } else if (parsed.account) {
-      // Stap 2: zoek meest recente verkoop voor dit account zonder transactie-id (chronologische match)
-      const { data: kandidaten } = await supabase
-        .from('verkopen')
-        .select('id, product, created_at')
-        .eq('account', parsed.account)
-        .is('vinted_transaction_id', null)
-        .in('status', ['Verkocht - Nog niet verzonden'])
-        .order('created_at', { ascending: false })
-        .limit(5)
-
-      // Eerst proberen op product-match, anders meest recente
-      const productMatch = parsed.productMapped
-        ? kandidaten?.find((k) => k.product === parsed.productMapped)
-        : null
-      const target = productMatch || kandidaten?.[0]
-
-      if (target) {
-        verkoopId = target.id
-        // Vul alleen transaction_id en (optioneel) canonieke product-naam in.
-        // Status blijft 'Verkocht - Nog niet verzonden'.
-        await supabase
-          .from('verkopen')
-          .update({
-            vinted_transaction_id: parsed.transactionId,
-            ...(parsed.productMapped && parsed.productMapped !== 'Onbekend'
-              ? { product: parsed.productMapped }
-              : {}),
-          })
-          .eq('id', verkoopId)
-      }
-    }
-
-    if (verkoopId) {
-      await updateLog({ status: 'auto-applied', verkoop_id: verkoopId })
+        .eq('id', bestaand.id)
+      await updateLog({ status: 'auto-applied', verkoop_id: bestaand.id })
       stats.autoApplied++
     } else {
+      // Geen match — archiveren. Tristan markeert status zelf via Verzenden-tab.
       await updateLog({
-        status: 'error',
-        foutmelding: 'geen matching verkoop gevonden voor verzendlabel',
+        status: 'rejected',
+        foutmelding: 'geen tx_id-match (verkoop niet via Gmail-flow gekoppeld)',
       })
-      stats.errors++
     }
     return
   }
 
   if (parsed.type === 'afgerond') {
     if (!parsed.transactionId) {
-      await updateLog({ status: 'error', foutmelding: 'afgerond mist transactie-ID' })
-      stats.errors++
+      await updateLog({ status: 'rejected', foutmelding: 'afgerond mist transactie-ID' })
       return
     }
 
-    // Match strikt op transactie-ID. Verkopen via Gmail-flow hebben deze (via verzendlabel-mail).
-    // Voor handmatig ingevoerde verkopen zonder tx_id: NIET automatisch matchen op
-    // product+prijs — dat geeft té vaak verkeerde matches met andere bestellingen.
-    // In plaats daarvan: zet log op 'pending' zodat Tristan zelf de juiste verkoop aanwijst.
     const { data: bestaand } = await supabase
       .from('verkopen')
       .select('id, verkoopprijs')
@@ -300,11 +258,11 @@ async function verwerkParse(
       .maybeSingle()
 
     if (!bestaand) {
+      // Geen match — archiveren. Tristan zet status zelf op Afgerond via Bestellingen.
       await updateLog({
-        status: 'pending',
-        foutmelding: `geen verkoop gevonden met transactie-ID ${parsed.transactionId}. Koppel handmatig via Bestellingen of de Inbox.`,
+        status: 'rejected',
+        foutmelding: 'geen tx_id-match (verkoop niet via Gmail-flow gekoppeld)',
       })
-      stats.pending++
       return
     }
 
@@ -338,7 +296,7 @@ async function verwerkParse(
         return
       }
     }
-    await updateLog({ status: 'error', foutmelding: 'retour-mail kan niet gekoppeld worden' })
-    stats.errors++
+    // Geen match — archiveren.
+    await updateLog({ status: 'rejected', foutmelding: 'retour-mail zonder tx_id-match' })
   }
 }
