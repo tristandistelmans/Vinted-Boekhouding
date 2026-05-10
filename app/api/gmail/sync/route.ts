@@ -289,68 +289,36 @@ async function verwerkParse(
       return
     }
 
-    // Stap 1: probeer match op transactie-ID (snelste pad voor verkopen die via Gmail-flow zijn aangekomen).
-    let target: { id: string; verkoopprijs: number } | null = null
-    {
-      const { data } = await supabase
-        .from('verkopen')
-        .select('id, verkoopprijs')
-        .eq('vinted_transaction_id', parsed.transactionId)
-        .maybeSingle()
-      if (data) target = data
-    }
+    // Match strikt op transactie-ID. Verkopen via Gmail-flow hebben deze (via verzendlabel-mail).
+    // Voor handmatig ingevoerde verkopen zonder tx_id: NIET automatisch matchen op
+    // product+prijs — dat geeft té vaak verkeerde matches met andere bestellingen.
+    // In plaats daarvan: zet log op 'pending' zodat Tristan zelf de juiste verkoop aanwijst.
+    const { data: bestaand } = await supabase
+      .from('verkopen')
+      .select('id, verkoopprijs')
+      .eq('vinted_transaction_id', parsed.transactionId)
+      .maybeSingle()
 
-    // Stap 2: fallback voor verkopen die handmatig zijn ingevoerd (geen tx_id).
-    // Match op product + account + bedrag + niet-afgeronde status, binnen 60 dagen.
-    if (!target && parsed.account && parsed.productMapped && parsed.productMapped !== 'Onbekend' && parsed.bedragItem !== null) {
-      const sinds = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
-      const { data: kandidaten } = await supabase
-        .from('verkopen')
-        .select('id, verkoopprijs, verkoopdatum')
-        .eq('account', parsed.account)
-        .eq('product', parsed.productMapped)
-        .eq('verkoopprijs', parsed.bedragItem)
-        .in('status', ['Verkocht - Nog niet verzonden', 'Onderweg'])
-        .is('vinted_transaction_id', null)
-        .gte('verkoopdatum', sinds)
-        .order('verkoopdatum', { ascending: true })
-
-      if (kandidaten && kandidaten.length === 1) {
-        target = kandidaten[0]
-      } else if (kandidaten && kandidaten.length > 1) {
-        await updateLog({
-          status: 'error',
-          foutmelding: `ambigue match: ${kandidaten.length} verkopen met ${parsed.productMapped} €${parsed.bedragItem} voor ${parsed.account}. Vul handmatig in.`,
-        })
-        stats.errors++
-        return
-      }
-    }
-
-    if (!target) {
+    if (!bestaand) {
       await updateLog({
-        status: 'error',
-        foutmelding: `geen verkoop gevonden voor transactie-id ${parsed.transactionId} (geen tx-match en geen fallback-match op ${parsed.productMapped || '?'} €${parsed.bedragItem || '?'} ${parsed.account || '?'})`,
+        status: 'pending',
+        foutmelding: `geen verkoop gevonden met transactie-ID ${parsed.transactionId}. Koppel handmatig via Bestellingen of de Inbox.`,
       })
-      stats.errors++
+      stats.pending++
       return
     }
 
-    // Update status én vul transactie-ID in als nog leeg (voor toekomstige reference)
     await supabase
       .from('verkopen')
-      .update({
-        status: 'Afgerond (geld binnen)',
-        vinted_transaction_id: parsed.transactionId,
-      })
-      .eq('id', target.id)
+      .update({ status: 'Afgerond (geld binnen)' })
+      .eq('id', bestaand.id)
 
-    await updateLog({ status: 'auto-applied', verkoop_id: target.id })
+    await updateLog({ status: 'auto-applied', verkoop_id: bestaand.id })
     stats.autoApplied++
 
-    if (parsed.bedragItem !== null && target.verkoopprijs && Math.abs(parsed.bedragItem - target.verkoopprijs) > 0.5) {
+    if (parsed.bedragItem !== null && bestaand.verkoopprijs && Math.abs(parsed.bedragItem - bestaand.verkoopprijs) > 0.5) {
       console.warn(
-        `Bedragverschil voor transactie ${parsed.transactionId}: mail=${parsed.bedragItem}, db=${target.verkoopprijs}`
+        `Bedragverschil voor transactie ${parsed.transactionId}: mail=${parsed.bedragItem}, db=${bestaand.verkoopprijs}`
       )
     }
     return

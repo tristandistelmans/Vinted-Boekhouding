@@ -23,6 +23,7 @@ export default function InboxPage() {
   const [bezig, setBezig] = useState<string | null>(null)
   const [bewerkItem, setBewerkItem] = useState<EmailIngestie | null>(null)
   const [bundelItem, setBundelItem] = useState<EmailIngestie | null>(null)
+  const [koppelItem, setKoppelItem] = useState<EmailIngestie | null>(null)
 
   const laad = useCallback(async () => {
     setLaden(true)
@@ -58,6 +59,7 @@ export default function InboxPage() {
       setBezig(null)
       setBewerkItem(null)
       setBundelItem(null)
+      setKoppelItem(null)
     }
   }
 
@@ -171,6 +173,15 @@ export default function InboxPage() {
                     Bundel splitsen ({item.bundel_aantal}×)
                   </button>
                 )}
+                {(item.mail_type === 'afgerond' || item.mail_type === 'retour') && (
+                  <button
+                    onClick={() => setKoppelItem(item)}
+                    disabled={bezig === item.id}
+                    className="flex-1 py-2 rounded-lg bg-emerald-600 text-white text-sm font-medium disabled:opacity-50"
+                  >
+                    Koppel verkoop
+                  </button>
+                )}
                 <button
                   onClick={() => actie(item.id, 'afwijzen')}
                   disabled={bezig === item.id}
@@ -197,6 +208,14 @@ export default function InboxPage() {
           item={bundelItem}
           onCancel={() => setBundelItem(null)}
           onConfirm={(regels) => actie(bundelItem.id, 'akkoord-bundel', { regels })}
+        />
+      )}
+
+      {koppelItem && (
+        <KoppelModal
+          item={koppelItem}
+          onCancel={() => setKoppelItem(null)}
+          onConfirm={(verkoop_id) => actie(koppelItem.id, 'koppel-verkoop', { verkoop_id })}
         />
       )}
     </div>
@@ -315,6 +334,119 @@ function BundelModal({
             {aantal} verkopen aanmaken
           </button>
         </div>
+      </div>
+    </div>
+  )
+}
+
+type VerkoopOption = {
+  id: string
+  verkoopdatum: string
+  product: string
+  naam_koper: string
+  verkoopprijs: number
+  status: string
+  account: string
+}
+
+function KoppelModal({
+  item,
+  onCancel,
+  onConfirm,
+}: {
+  item: EmailIngestie
+  onCancel: () => void
+  onConfirm: (verkoop_id: string) => void
+}) {
+  const parsed = (item.parsed_data || {}) as ParsedData
+  const [verkopen, setVerkopen] = useState<VerkoopOption[]>([])
+  const [laden, setLaden] = useState(true)
+  const [zoek, setZoek] = useState('')
+
+  useEffect(() => {
+    let cancelled = false
+    fetch('/api/verkopen')
+      .then((r) => r.json())
+      .then((data: VerkoopOption[]) => {
+        if (cancelled) return
+        // Filter: zelfde account, niet-afgeronde status. Sorteer recent eerst.
+        const filtered = data
+          .filter((v) =>
+            v.account === item.account &&
+            ['Verkocht - Nog niet verzonden', 'Onderweg'].includes(v.status)
+          )
+          .sort((a, b) => b.verkoopdatum.localeCompare(a.verkoopdatum))
+        setVerkopen(filtered)
+        setLaden(false)
+      })
+      .catch(() => setLaden(false))
+    return () => {
+      cancelled = true
+    }
+  }, [item.account])
+
+  const lower = zoek.toLowerCase()
+  const zichtbaar = lower
+    ? verkopen.filter(
+        (v) =>
+          v.product.toLowerCase().includes(lower) ||
+          v.naam_koper.toLowerCase().includes(lower) ||
+          v.verkoopprijs.toString().includes(lower)
+      )
+    : verkopen
+
+  const isRetour = item.mail_type === 'retour'
+  const titel = isRetour ? 'Koppel retour aan verkoop' : 'Koppel afgerond aan verkoop'
+
+  return (
+    <div className="fixed inset-0 bg-black/70 z-50 flex items-end justify-center p-2">
+      <div className="bg-gray-900 rounded-t-2xl pt-6 px-6 pb-24 w-full max-w-lg overflow-y-auto max-h-[95vh]">
+        <h2 className="text-white text-lg font-semibold mb-1">{titel}</h2>
+        <p className="text-gray-400 text-xs mb-3">
+          Vinted-mail: <span className="text-gray-200">{parsed.productMapped || parsed.product || '?'}</span>
+          {parsed.bedragItem != null && <> · {formatEuro(parsed.bedragItem)}</>}
+          {parsed.transactionId && <> · tx #{parsed.transactionId}</>}
+        </p>
+        <input
+          type="text"
+          placeholder="Zoek op product, koper of prijs..."
+          value={zoek}
+          onChange={(e) => setZoek(e.target.value)}
+          className="w-full bg-gray-800 border border-gray-700 text-white rounded-xl px-4 py-3 mb-3"
+          autoFocus
+        />
+        <div className="space-y-2 mb-4 max-h-72 overflow-y-auto">
+          {laden && <div className="text-center text-gray-500 py-4">Verkopen laden...</div>}
+          {!laden && zichtbaar.length === 0 && (
+            <div className="text-center text-gray-500 py-4 text-sm">
+              Geen openstaande verkopen voor {item.account}.
+            </div>
+          )}
+          {zichtbaar.map((v) => (
+            <button
+              key={v.id}
+              onClick={() => onConfirm(v.id)}
+              className="w-full text-left bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-xl px-4 py-3 transition-colors"
+            >
+              <div className="flex items-start justify-between gap-2">
+                <div>
+                  <p className="text-gray-200 text-sm font-medium">{v.product}</p>
+                  <p className="text-gray-500 text-xs">{v.naam_koper} · {formatEuro(v.verkoopprijs)}</p>
+                </div>
+                <div className="text-right">
+                  <p className="text-gray-400 text-xs">{v.verkoopdatum}</p>
+                  <p className="text-gray-500 text-xs">{v.status}</p>
+                </div>
+              </div>
+            </button>
+          ))}
+        </div>
+        <button
+          onClick={onCancel}
+          className="w-full py-3 rounded-xl bg-gray-700 text-white font-medium"
+        >
+          Annuleren
+        </button>
       </div>
     </div>
   )

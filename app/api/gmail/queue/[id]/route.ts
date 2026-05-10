@@ -3,12 +3,17 @@ import { getSupabase } from '@/lib/supabase'
 
 type RouteParams = { params: Promise<{ id: string }> }
 
-// POST /api/gmail/queue/[id] body: { actie: 'akkoord' | 'afwijzen' | 'akkoord-bundel', overrides?: {...}, regels?: [{product, prijs}] }
+// POST /api/gmail/queue/[id]
+// Acties:
+//   - 'akkoord' (verkoop-mail) — maak nieuwe verkoop met de geparseerde velden
+//   - 'akkoord-bundel' (bundel-verkoop) — split in N verkopen
+//   - 'afwijzen' — geen DB-actie, log status='rejected'
+//   - 'koppel-verkoop' (afgerond/retour) — koppel deze mail aan een bestaande verkoop (verkoop_id meegeven)
 export async function POST(req: NextRequest, { params }: RouteParams) {
   const { id } = await params
   const body = await req.json()
-  const { actie, overrides, regels } = body as {
-    actie: 'akkoord' | 'afwijzen' | 'akkoord-bundel'
+  const { actie, overrides, regels, verkoop_id } = body as {
+    actie: 'akkoord' | 'afwijzen' | 'akkoord-bundel' | 'koppel-verkoop'
     overrides?: {
       product?: string
       naam_koper?: string
@@ -17,6 +22,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
       verkoopdatum?: string
     }
     regels?: { product: string }[]
+    verkoop_id?: string
   }
 
   const supabase = getSupabase()
@@ -142,6 +148,48 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
       .eq('id', id)
 
     return NextResponse.json({ ok: true, verkoop_ids: nieuw.map((r) => r.id) })
+  }
+
+  if (actie === 'koppel-verkoop') {
+    if (log.mail_type !== 'afgerond' && log.mail_type !== 'retour') {
+      return NextResponse.json({ error: 'koppel-verkoop werkt op afgerond- of retour-mails' }, { status: 400 })
+    }
+    if (!verkoop_id) {
+      return NextResponse.json({ error: 'verkoop_id is verplicht' }, { status: 400 })
+    }
+
+    const { data: verkoop, error: verkoopErr } = await supabase
+      .from('verkopen')
+      .select('id, status, vinted_transaction_id')
+      .eq('id', verkoop_id)
+      .maybeSingle()
+
+    if (verkoopErr || !verkoop) {
+      return NextResponse.json({ error: 'verkoop niet gevonden' }, { status: 404 })
+    }
+
+    const nieuweStatus = log.mail_type === 'retour' ? 'Retour' : 'Afgerond (geld binnen)'
+    const txId = log.vinted_transaction_id || (parsed.transactionId as string | undefined) || null
+
+    await supabase
+      .from('verkopen')
+      .update({
+        status: nieuweStatus,
+        ...(txId && !verkoop.vinted_transaction_id ? { vinted_transaction_id: txId } : {}),
+      })
+      .eq('id', verkoop.id)
+
+    await supabase
+      .from('email_ingestie_log')
+      .update({
+        status: 'approved',
+        verkoop_id: verkoop.id,
+        foutmelding: null,
+        verwerkt_op: new Date().toISOString(),
+      })
+      .eq('id', id)
+
+    return NextResponse.json({ ok: true, verkoop_id: verkoop.id, status: nieuweStatus })
   }
 
   return NextResponse.json({ error: 'onbekende actie' }, { status: 400 })
