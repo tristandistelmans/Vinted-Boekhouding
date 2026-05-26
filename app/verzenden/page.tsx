@@ -58,8 +58,9 @@ function deadlineLabel(dagenOver: number, isVerlopen: boolean): { tekst: string;
 }
 
 const accountLabel: Record<string, string> = {
-  '1-jesuslata': 'Jesuslata',
   '2-disteltr': 'Disteltr',
+  'trisverve': 'Trisverve',
+  '1-jesuslata': 'Jesuslata',
   '3-jasmijn': 'Jasmijn',
 }
 

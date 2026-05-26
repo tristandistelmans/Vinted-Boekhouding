@@ -116,12 +116,103 @@ export async function GET(request: NextRequest) {
     }
   }).sort((a, b) => b.in_huis - a.in_huis)
 
-  // Winst per maand (dit jaar)
-  const maandnamen = ['Jan', 'Feb', 'Mrt', 'Apr', 'Mei', 'Jun', 'Jul', 'Aug', 'Sep', 'Okt', 'Nov', 'Dec']
-  const winstPerMaand = maandnamen.map((naam, i) => {
+  const maandnamen = ['januari', 'februari', 'maart', 'april', 'mei', 'juni', 'juli', 'augustus', 'september', 'oktober', 'november', 'december']
+
+  const maandOverzicht = maandnamen.map((maand, i) => {
     const vk = verkopenDitJaar.filter((v) => new Date(v.verkoopdatum).getMonth() === i)
-    return { naam, winst: sommeerWinst(vk) }
+    const voltooid = vk.filter((v) => v.status === 'Afgerond (geld binnen)')
+    const onderweg = vk.filter((v) => v.status === 'Verkocht - Nog niet verzonden' || v.status === 'Onderweg')
+    const omzetVoltooid = voltooid.reduce((s, v) => s + v.verkoopprijs, 0)
+    const omzetOnderweg = onderweg.reduce((s, v) => s + v.verkoopprijs, 0)
+    const inkopenMaand = (inkopen || [])
+      .filter((p: { besteldatum: string; status: string; totale_aankoopprijs: number }) => {
+        const d = new Date(p.besteldatum)
+        return d.getFullYear() === ditJaar && d.getMonth() === i && p.status !== 'Beginsaldo'
+      })
+      .reduce((s: number, p: { totale_aankoopprijs: number }) => s + p.totale_aankoopprijs, 0)
+    const extraMaand = (extraKostenData || [])
+      .filter((e: { datum: string }) => {
+        const d = new Date(e.datum)
+        return d.getFullYear() === ditJaar && d.getMonth() === i
+      })
+      .reduce((s: number, e: { bedrag: number }) => s + e.bedrag, 0)
+
+    // Bestseller deze maand: meeste verkopen (actieve statussen), tiebreak op hoogste omzet
+    const actieveVk = vk.filter((v) => ACTIEVE_STATUSSEN.includes(v.status))
+    const perProduct: Record<string, { aantal: number; omzet: number }> = {}
+    actieveVk.forEach((v) => {
+      if (!perProduct[v.product]) perProduct[v.product] = { aantal: 0, omzet: 0 }
+      perProduct[v.product].aantal += 1
+      perProduct[v.product].omzet += v.verkoopprijs
+    })
+    const topEntry = Object.entries(perProduct).sort((a, b) => {
+      if (b[1].aantal !== a[1].aantal) return b[1].aantal - a[1].aantal
+      return b[1].omzet - a[1].omzet
+    })[0]
+
+    return {
+      maand,
+      omzetVoltooid,
+      omzetOnderweg,
+      inkopen: inkopenMaand,
+      extraKosten: extraMaand,
+      netto: omzetVoltooid - inkopenMaand - extraMaand,
+      aantalVerkocht: actieveVk.length,
+      topProduct: topEntry ? topEntry[0] : null,
+      topAantal: topEntry ? topEntry[1].aantal : 0,
+    }
   })
+
+  // Prestaties per pet (dit jaar) — voor dashboard tabel
+  const voorraadByProduct: Record<string, { in_huis: number; onderweg: number }> = {}
+  voorraad.forEach((v) => {
+    voorraadByProduct[v.product] = { in_huis: v.in_huis, onderweg: v.onderweg }
+  })
+
+  const prestatiePerPet = PRODUCTEN.map((product) => {
+    const vk = verkopenDitJaar.filter((v) => v.product === product)
+    const actieveVk = vk.filter((v) => ACTIEVE_STATUSSEN.includes(v.status))
+    const verkocht = actieveVk.length
+
+    const totaleWinst = sommeerWinst(vk)
+    const gemVerkoopprijs = verkocht > 0
+      ? actieveVk.reduce((s, v) => s + v.verkoopprijs, 0) / verkocht
+      : 0
+
+    // Snelheid: verkopen per maand sinds eerste verkoop dit jaar
+    let verkopenPerMaand = 0
+    if (verkocht > 0) {
+      const eersteMaand = Math.min(...actieveVk.map((v) => new Date(v.verkoopdatum).getMonth()))
+      const maandenActief = (dezeMaand - eersteMaand) + 1
+      verkopenPerMaand = verkocht / Math.max(1, maandenActief)
+    }
+
+    // Topmaand voor dit pet
+    const perMaand: Record<number, number> = {}
+    actieveVk.forEach((v) => {
+      const m = new Date(v.verkoopdatum).getMonth()
+      perMaand[m] = (perMaand[m] || 0) + 1
+    })
+    const topMaandEntry = Object.entries(perMaand).sort((a, b) => b[1] - a[1])[0]
+    const topMaandIdx = topMaandEntry ? Number(topMaandEntry[0]) : null
+    const topMaandAantal = topMaandEntry ? topMaandEntry[1] : 0
+
+    const vrr = voorraadByProduct[product] || { in_huis: 0, onderweg: 0 }
+
+    return {
+      product,
+      verkocht,
+      totaleWinst,
+      gemVerkoopprijs,
+      verkopenPerMaand,
+      inHuis: vrr.in_huis,
+      onderweg: vrr.onderweg,
+      topMaand: topMaandIdx !== null ? maandnamen[topMaandIdx] : null,
+      topMaandAantal,
+    }
+  })
+    .filter((p) => p.verkocht > 0 || p.inHuis > 0 || p.onderweg > 0)
+    .sort((a, b) => b.verkocht - a.verkocht)
 
   // Winst per product (dit jaar)
   const winstPerProduct = PRODUCTEN.map((product) => {
@@ -135,11 +226,16 @@ export async function GET(request: NextRequest) {
     return { product, winst: sommeerWinst(vk), aantal: vk.length, gemVerkoopprijs }
   }).sort((a, b) => b.winst - a.winst)
 
-  // Totale waarde in voorraad
-  const totaleVoorraadWaarde = voorraad.reduce((sum, item) => {
+  // Voorraadwaarde uitgesplitst (in huis vs onderweg)
+  const voorraadWaardeInHuis = voorraad.reduce((sum, item) => {
     const gemKost = gemKostByProduct[item.product] ?? 0
     return sum + item.in_huis * gemKost
   }, 0)
+  const voorraadWaardeOnderweg = voorraad.reduce((sum, item) => {
+    const gemKost = gemKostByProduct[item.product] ?? 0
+    return sum + item.onderweg * gemKost
+  }, 0)
+  const voorraadWaardeTotaal = voorraadWaardeInHuis + voorraadWaardeOnderweg
 
   // Winst per account (dit jaar)
   const accounts = [...new Set((alleVerkopen || []).map((v) => v.account))].sort()
@@ -362,7 +458,9 @@ export async function GET(request: NextRequest) {
     winstDezeMaand: sommeerWinst(verkopenDezeMaand),
     aantalDezeMaand: verkopenDezeMaand.length,
     aantalDitJaar: verkopenDitJaar.length,
-    totaleVoorraadWaarde,
+    voorraadWaardeInHuis,
+    voorraadWaardeOnderweg,
+    voorraadWaardeTotaal,
     omzetDitJaar,
     kostenProductDitJaar,
     commissiesDitJaar,
@@ -385,7 +483,8 @@ export async function GET(request: NextRequest) {
     winstPerAccountDezeMaand,
     teVerzenden,
     voorraad,
-    winstPerMaand,
+    maandOverzicht,
+    prestatiePerPet,
     winstPerProduct,
     winstPerAccount,
     jasmijnStats,

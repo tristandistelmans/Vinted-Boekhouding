@@ -28,9 +28,9 @@ export const STATUSSEN = [
   'Probleem',
 ] as const
 
-export const ACCOUNTS = ['1-jesuslata', '2-disteltr', '3-jasmijn'] as const
+export const ACCOUNTS = ['2-disteltr', 'trisverve', '1-jesuslata', '3-jasmijn'] as const
 
-export const CEO_ACCOUNTS = ['1-jesuslata', '2-disteltr', '3-jasmijn'] as const
+export const CEO_ACCOUNTS = ['2-disteltr', 'trisverve', '1-jesuslata', '3-jasmijn'] as const
 
 export const ACTIEVE_STATUSSEN = [
   'Afgerond (geld binnen)',
@@ -38,51 +38,23 @@ export const ACTIEVE_STATUSSEN = [
   'Onderweg',
 ]
 
+const GEDEELDE_BESCHRIJVING = `Hey :)
+Ik verkoop mijn collectie Aime leon Dore petten omdat ik ga verhuizen.
+Ik heb ze altijd verzameld maar verhuizen is duur dus ik heb wat extra geld nodig en ik moet plaatsmaken haha.
+Als je vragen hebt mag je het altijd laten weten!`
+
 export const LISTINGS: Record<string, { titel: string; beschrijving: string }> = {
-  'NY Navy': {
-    titel: 'Cap Aime Leon Dore Yankees Navy Cotton Blue',
-    beschrijving: 'There are no signs of usage. If you have any questions, ask away!',
-  },
-  'NY Beige/Green': {
-    titel: 'Cap Aime Leon Dore Yankees Beige Cotton Green',
-    beschrijving: 'There are no signs of usage. If you have any questions, ask away!',
-  },
-  'Porsche Green': {
-    titel: 'Cap Aime Leon Dore Porsche Cotton Green',
-    beschrijving: 'There are no signs of usage. If you have any questions, ask away!',
-  },
-  'Porsche Black': {
-    titel: 'Cap Aime Leon Dore Porsche Cotton Black',
-    beschrijving: 'There are no signs of usage. If you have any questions, ask away!',
-  },
-  'Porsche Red': {
-    titel: 'Cap Aime Leon Dore Porsche Cotton Red',
-    beschrijving: 'There are no signs of usage. If you have any questions, ask away!',
-  },
-  'Porsche White Green': {
-    titel: 'Cap Aime Leon Dore Porsche Cotton Beige Green',
-    beschrijving: 'There are no signs of usage. If you have any questions, ask away!',
-  },
-  'UNI Black': {
-    titel: 'Cap Aime Leon Dore Unisphere Cotton Black',
-    beschrijving: 'There are no signs of usage. If you have any questions, ask away!',
-  },
-  'UNI Green': {
-    titel: 'Cap Aime Leon Dore Unisphere Cotton green',
-    beschrijving: 'There are no signs of usage. If you have any questions, ask away!',
-  },
-  'UNI Beige': {
-    titel: 'Cap Aime Leon Dore Unisphere Cotton Beige Green',
-    beschrijving: 'There are no signs of usage. If you have any questions, ask away!',
-  },
-  'UNI Navy': {
-    titel: 'Cap Aime Leon Dore Unisphere Cotton Navy',
-    beschrijving: 'There are no signs of usage. If you have any questions, ask away!',
-  },
-  'UNI White': {
-    titel: 'Cap Aime Leon Dore Unisphere Nylon White',
-    beschrijving: 'There are no signs of usage. If you have any questions, ask away!',
-  },
+  'NY Navy':             { titel: 'Aime leon Dore pet New Era Yankees Navy Perfect',        beschrijving: GEDEELDE_BESCHRIJVING },
+  'NY Beige/Green':      { titel: 'Aime leon Dore pet New Era Yankees Beige Groen Perfect', beschrijving: GEDEELDE_BESCHRIJVING },
+  'Porsche Green':       { titel: 'Groene Pet van Aime Leon dore Porsche Perfect',          beschrijving: GEDEELDE_BESCHRIJVING },
+  'Porsche Black':       { titel: 'Zwarte Pet van Aime Leon dore Porsche Perfect',          beschrijving: GEDEELDE_BESCHRIJVING },
+  'Porsche Red':         { titel: 'Rode Pet van Aime Leon dore Porsche Perfect',            beschrijving: GEDEELDE_BESCHRIJVING },
+  'Porsche White Green': { titel: 'Wit Groen Pet van Aime Leon dore Porsche Perfect',       beschrijving: GEDEELDE_BESCHRIJVING },
+  'UNI Black':           { titel: 'Aime Leon Dore Pet Zwart Unisphere Perfect',             beschrijving: GEDEELDE_BESCHRIJVING },
+  'UNI Green':           { titel: 'Aime Leon Dore Pet Groen Unisphere Perfect',             beschrijving: GEDEELDE_BESCHRIJVING },
+  'UNI Beige':           { titel: 'Aime Leon Dore Pet Beige Groen Unisphere Perfect',       beschrijving: GEDEELDE_BESCHRIJVING },
+  'UNI Navy':            { titel: 'Aime Leon Dore Pet Navy Geel Unisphere Perfect',         beschrijving: GEDEELDE_BESCHRIJVING },
+  'UNI White':           { titel: 'Aime Leon Dore Pet Wit Nylon Unisphere Perfect',         beschrijving: GEDEELDE_BESCHRIJVING },
 }
 
 // Mapping van Vinted listing-titels (keywords) naar onze productnamen.

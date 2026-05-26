@@ -53,7 +53,17 @@ type Stats = {
   kostenInkopenDezeMaand: number
   winstPerProductDezeMaand: { product: string; winst: number; aantal: number; gemVerkoopprijs: number }[]
   winstPerAccountDezeMaand: { account: string; winst: number; aantal: number }[]
-  winstPerMaand: { naam: string; winst: number }[]
+  maandOverzicht: {
+    maand: string
+    omzetVoltooid: number
+    omzetOnderweg: number
+    inkopen: number
+    extraKosten: number
+    netto: number
+    aantalVerkocht: number
+    topProduct: string | null
+    topAantal: number
+  }[]
   winstPerProduct: { product: string; winst: number; aantal: number; gemVerkoopprijs: number }[]
   winstPerAccount: { account: string; winst: number; aantal: number }[]
   jasmijnStats?: JasmijnStats
@@ -120,11 +130,8 @@ export default function StatistiekenPage() {
     return <JasmijnStatistieken stats={stats} jasmijn={stats.jasmijnStats} huidigJaar={huidigJaar} commissieRegels={stats.commissieRegels} />
   }
 
-  const maandData = stats.winstPerMaand.filter((m) => m.winst !== 0)
   const topProducten = stats.winstPerProduct.slice(0, 8)
   const top2025 = STATS_2025.winstPerProduct.slice(0, 8)
-  const maandnamen = ['januari','februari','maart','april','mei','juni','juli','augustus','september','oktober','november','december']
-  const huidigeMaand = maandnamen[new Date().getMonth()]
 
   return (
     <div className="px-4 pt-6 pb-4">
@@ -149,55 +156,14 @@ export default function StatistiekenPage() {
 
       {jaar === 2026 ? (
         <>
-          {/* DEZE MAAND */}
-          <p className="text-xs font-semibold text-gray-500 uppercase tracking-widest mb-2">{huidigeMaand}</p>
-          <div className="bg-gray-800 rounded-xl p-4 mb-3">
-            <div className="flex gap-2 mb-4">
-              <div className="flex-1 bg-emerald-900/30 border border-emerald-700/40 rounded-xl p-3 text-center">
-                <p className="text-emerald-400 text-lg font-bold">{formatEuro(stats.geldBinnenDezeMaand)}</p>
-                <p className="text-emerald-700 text-xs mt-0.5">Bevestigd</p>
-              </div>
-              <div className="flex-1 bg-yellow-900/20 border border-yellow-700/30 rounded-xl p-3 text-center">
-                <p className="text-yellow-400 text-lg font-bold">{formatEuro(stats.geldVerwachtDezeMaand)}</p>
-                <p className="text-yellow-700 text-xs mt-0.5">Onderweg</p>
-              </div>
-              <div className="flex-1 bg-red-900/20 border border-red-700/30 rounded-xl p-3 text-center">
-                <p className="text-red-400 text-lg font-bold">− {formatEuro(stats.kostenInkopenDezeMaand + stats.extraKostenDezeMaand)}</p>
-                <p className="text-red-700 text-xs mt-0.5">Kosten</p>
-              </div>
-            </div>
-            <div className="space-y-2 text-sm">
-              <div className="flex justify-between">
-                <span className="text-gray-400">Omzet</span>
-                <span className="text-white font-medium">{formatEuro(stats.omzetDezeMaand)}</span>
-              </div>
-              {stats.kostenInkopenDezeMaand > 0 && (
-                <div className="flex justify-between">
-                  <span className="text-gray-400">Inkoopkosten</span>
-                  <span className="text-red-400">− {formatEuro(stats.kostenInkopenDezeMaand)}</span>
-                </div>
-              )}
-              {stats.extraKostenDezeMaand > 0 && (
-                <div className="flex justify-between">
-                  <span className="text-gray-400">Extra kosten</span>
-                  <span className="text-red-400">− {formatEuro(stats.extraKostenDezeMaand)}</span>
-                </div>
-              )}
-              <div className="flex justify-between border-t border-gray-700 pt-2">
-                <span className="text-white font-semibold">Netto</span>
-                <span className={`font-bold ${(stats.omzetDezeMaand - stats.kostenInkopenDezeMaand - stats.extraKostenDezeMaand) >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                  {formatEuro(stats.omzetDezeMaand - stats.kostenInkopenDezeMaand - stats.extraKostenDezeMaand)}
-                </span>
-              </div>
-            </div>
-          </div>
+          <p className="text-gray-500 text-xs mb-4">Maandoverzicht en bestsellers per maand vind je op het Dashboard.</p>
 
-          {/* Per account deze maand */}
-          {stats.winstPerAccountDezeMaand.length > 0 && (
-            <div className="bg-gray-800 rounded-xl p-4 mb-3">
-              <h2 className="text-white font-semibold mb-3">Per account</h2>
+          {/* Per account dit jaar */}
+          {stats.winstPerAccount.length > 0 && (
+            <div className="bg-gray-800 rounded-xl p-4 mb-4">
+              <h2 className="text-white font-semibold mb-3">Per account {huidigJaar}</h2>
               <div className="space-y-2">
-                {stats.winstPerAccountDezeMaand.map((a) => (
+                {stats.winstPerAccount.map((a) => (
                   <div key={a.account} className="flex items-center gap-1 py-1">
                     <span className="text-gray-300 text-sm whitespace-nowrap">{a.account}</span>
                     <span className="flex-1 border-b border-dotted border-gray-600 mb-0.5 mx-1" />
@@ -212,61 +178,6 @@ export default function StatistiekenPage() {
               </div>
             </div>
           )}
-
-          {/* Bestsellers deze maand */}
-          {stats.winstPerProductDezeMaand.some((p) => p.aantal > 0) && (
-            <div className="bg-gray-800 rounded-xl p-4 mb-6">
-              <h2 className="text-white font-semibold mb-3">Bestsellers</h2>
-              <div className="grid grid-cols-4 gap-1 px-1 mb-2">
-                <span className="text-gray-500 text-xs col-span-2">Product</span>
-                <span className="text-gray-500 text-xs text-right">Gem. prijs</span>
-                <span className="text-gray-500 text-xs text-right">Winst</span>
-              </div>
-              <div className="space-y-2">
-                {stats.winstPerProductDezeMaand
-                  .filter((p) => p.aantal > 0)
-                  .slice(0, 8)
-                  .map((p, i) => (
-                    <div key={p.product} className="grid grid-cols-4 gap-1 items-center py-1">
-                      <div className="col-span-2 flex items-center gap-1.5">
-                        <span className="text-gray-600 text-xs w-4 text-right shrink-0">{i + 1}.</span>
-                        <span className="text-gray-200 text-xs truncate">{p.product}</span>
-                      </div>
-                      <span className="text-gray-400 text-xs text-right">
-                        {p.gemVerkoopprijs > 0 ? formatEuro(p.gemVerkoopprijs) : '—'}
-                      </span>
-                      <span className={`text-xs font-medium text-right ${p.winst >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                        {formatEuro(p.winst)}
-                      </span>
-                    </div>
-                  ))}
-              </div>
-            </div>
-          )}
-
-          {/* DIT JAAR */}
-          <p className="text-xs font-semibold text-gray-500 uppercase tracking-widest mb-2">{new Date().getFullYear()}</p>
-
-          <div className="bg-gray-800 rounded-xl p-4 mb-4">
-            <h2 className="text-white font-semibold mb-4">Winst per maand</h2>
-            {maandData.length > 0 ? (
-              <ResponsiveContainer width="100%" height={200}>
-                <LineChart data={stats.winstPerMaand} margin={{ top: 5, right: 5, left: -20, bottom: 5 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-                  <XAxis dataKey="naam" tick={{ fill: '#9ca3af', fontSize: 11 }} />
-                  <YAxis tick={{ fill: '#9ca3af', fontSize: 11 }} tickFormatter={(v) => `€${v}`} />
-                  <Tooltip
-                    contentStyle={{ background: '#1f2937', border: '1px solid #374151', borderRadius: '8px' }}
-                    labelStyle={{ color: '#f9fafb' }}
-                    formatter={(value) => [formatEuro(Number(value)), 'Winst']}
-                  />
-                  <Line type="monotone" dataKey="winst" stroke="#34d399" strokeWidth={2} dot={{ fill: '#34d399', r: 3 }} />
-                </LineChart>
-              </ResponsiveContainer>
-            ) : (
-              <p className="text-gray-500 text-sm text-center py-8">Nog geen data dit jaar</p>
-            )}
-          </div>
 
           <div className="bg-gray-800 rounded-xl p-4 mb-4">
             <h2 className="text-white font-semibold mb-4">Winst per product</h2>
@@ -288,27 +199,6 @@ export default function StatistiekenPage() {
               <p className="text-gray-500 text-sm text-center py-8">Nog geen data dit jaar</p>
             )}
           </div>
-
-          {/* Per account 2026 */}
-          {stats.winstPerAccount.length > 0 && (
-            <div className="bg-gray-800 rounded-xl p-4 mb-4">
-              <h2 className="text-white font-semibold mb-3">Per account {huidigJaar}</h2>
-              <div className="space-y-2">
-                {stats.winstPerAccount.map((a) => (
-                  <div key={a.account} className="flex items-center gap-1 py-1">
-                    <span className="text-gray-300 text-sm whitespace-nowrap">{a.account}</span>
-                    <span className="flex-1 border-b border-dotted border-gray-600 mb-0.5 mx-1" />
-                    <div className="flex gap-3 items-center shrink-0">
-                      <span className="text-gray-400 text-xs">{a.aantal}x</span>
-                      <span className={`text-sm font-semibold ${a.winst >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                        {formatEuro(a.winst)}
-                      </span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
 
           {/* Bestsellers 2026 */}
           <div className="bg-gray-800 rounded-xl p-4">
