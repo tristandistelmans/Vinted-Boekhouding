@@ -30,7 +30,15 @@ export const STATUSSEN = [
 
 export const ACCOUNTS = ['2-disteltr', 'trisverve', '1-jesuslata', '3-jasmijn'] as const
 
-export const CEO_ACCOUNTS = ['2-disteltr', 'trisverve', '1-jesuslata', '3-jasmijn'] as const
+// Accounts die selecteerbaar zijn bij het invoeren van een nieuwe verkoop.
+// value = opgeslagen accountcode, label = weergavetekst in de dropdown.
+// Verwijderde accounts (trisverve, 3-jasmijn) blijven bestaan in de data,
+// maar zijn hier niet meer kiesbaar.
+export const CEO_ACCOUNTS = [
+  { value: '2-disteltr', label: 'disteltr' },
+  { value: '1-jesuslata', label: 'jesuslata' },
+  { value: 'trisgeuss', label: 'trisgeuss - iphone 13' },
+] as const
 
 export const ACTIEVE_STATUSSEN = [
   'Afgerond (geld binnen)',

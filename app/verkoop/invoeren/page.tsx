@@ -22,7 +22,7 @@ export default function VerkopInvoeren() {
     naam_koper: '',
     verkoopprijs: '50',
     status: 'Verkocht - Nog niet verzonden',
-    account: CEO_ACCOUNTS[0],
+    account: CEO_ACCOUNTS[0].value,
     notitie: '',
   })
   const [bezig, setBezig] = useState(false)
@@ -61,7 +61,7 @@ export default function VerkopInvoeren() {
       naam_koper: '',
       verkoopprijs: '50',
       status: 'Verkocht - Nog niet verzonden',
-      account: CEO_ACCOUNTS[0],
+      account: CEO_ACCOUNTS[0].value,
       notitie: '',
     })
   }
@@ -264,8 +264,8 @@ export default function VerkopInvoeren() {
               required
             >
               {CEO_ACCOUNTS.map((a) => (
-                <option key={a} value={a}>
-                  {a}
+                <option key={a.value} value={a.value}>
+                  {a.label}
                 </option>
               ))}
             </select>
