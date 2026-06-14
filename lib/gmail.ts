@@ -46,7 +46,10 @@ export async function listVintedMails(opts: {
 }): Promise<{ id: string; threadId: string }[]> {
   const gmail = getGmail()
   const queryParts = [
-    '(from:vinted.com OR from:vinted.be OR from:vinted.nl OR from:vinted.fr OR from:vintedcrm.com)',
+    // from:vinted.* dekt directe en via-gewone-Gmail-doorgestuurde Vinted-mail (afzender blijft
+    // vinted.*). Apple Sign-in-with-Apple relay herschrijft de afzender naar @privaterelay.appleid.com,
+    // dus voor trisgeuss matchen we daarnaast op het stabiele relay-ontvangeradres (to:).
+    '(from:vinted.com OR from:vinted.be OR from:vinted.nl OR from:vinted.fr OR from:vintedcrm.com OR to:ttpz954dst@privaterelay.appleid.com)',
     `after:${opts.afterEpochSec}`,
   ]
   if (opts.excludeProcessed) queryParts.push(`-label:${VERWERKT_LABEL}`)

@@ -32,13 +32,12 @@ export const ACCOUNTS = ['2-disteltr', 'trisverve', '1-jesuslata', '3-jasmijn'] 
 
 // Accounts die selecteerbaar zijn bij het invoeren van een nieuwe verkoop.
 // value = opgeslagen accountcode, label = weergavetekst in de dropdown.
-// Verwijderde accounts (trisverve, 3-jasmijn) blijven bestaan in de data,
-// maar zijn hier niet meer kiesbaar.
+// Verwijderde/inactieve accounts (trisverve, 3-jasmijn, 1-jesuslata) blijven bestaan
+// in de data, maar zijn hier niet meer kiesbaar. 1-jesuslata is geblokkeerd.
 export const CEO_ACCOUNTS = [
   { value: 'trisgeuss', label: 'trisgeuss - iphone 13' },
   { value: 'pertumstar', label: 'pertumstar - GSM Jasmijn' },
   { value: '2-disteltr', label: 'disteltr' },
-  { value: '1-jesuslata', label: 'jesuslata' },
 ] as const
 
 export const ACTIEVE_STATUSSEN = [

@@ -31,16 +31,28 @@ function mapProductBerg(title: string): string {
   return mapVintedProduct(normalizeProductTitle(title))
 }
 
-export type AccountKey = '1-jesuslata' | '2-disteltr'
+export type AccountKey = '1-jesuslata' | '2-disteltr' | 'pertumstar' | 'trisgeuss'
 
+// E-mailadres -> account. Best-effort: gevuld voor adressen die we kennen.
+// Voor pertumstar/trisgeuss (Apple/iCloud) zijn de exacte adressen nog onbekend;
+// die worden afgeleid uit de Vinted-username in de begroeting (zie findAccount stap 4).
+// Vul hier het echte adres in zodra het zichtbaar is in email_ingestie_log.
 const ACCOUNT_VAN_EMAIL: Record<string, AccountKey> = {
   'tristandistzlmans@gmail.com': '1-jesuslata',
   'disteltr@gmail.com': '2-disteltr',
+  // pertumstar: Vinted-adres = dedicated Gmail die naar de hub forwardt (afzender blijft vinted.*).
+  'esdoornm@gmail.com': 'pertumstar',
+  // trisgeuss: Apple Sign-in-with-Apple relay; het relay-adres blijft in de To-header staan.
+  'ttpz954dst@privaterelay.appleid.com': 'trisgeuss',
 }
 
+// Vinted-username -> account. De accountcodes zijn gelijk aan de Vinted-usernames,
+// dus dit is de betrouwbare detectie ongeacht welk e-mailadres doorstuurt.
 const ACCOUNT_VAN_USERNAME: Record<string, AccountKey> = {
   'jesuslata': '1-jesuslata',
   'disteltr': '2-disteltr',
+  'pertumstar': 'pertumstar',
+  'trisgeuss': 'trisgeuss',
 }
 
 export type ParseResult =
@@ -102,26 +114,16 @@ function parseEuro(raw: string): number | null {
 }
 
 function findAccount(body: string, fromHeader: string, toHeader: string): AccountKey | null {
-  // 1. Probeer "Aan: <{email}>" in geforwardde body
+  // 1. Probeer "Aan: <{email}>" in geforwardde body (specifiek: origineel ontvangeradres)
   const forwardedTo = body.match(/Aan:\s*<?([\w._-]+@[\w.-]+)>?/i)
   if (forwardedTo) {
     const email = forwardedTo[1].toLowerCase()
     if (ACCOUNT_VAN_EMAIL[email]) return ACCOUNT_VAN_EMAIL[email]
   }
 
-  // 2. To: header zelf (bij directe Vinted-mails of als forwarding wordt vervangen)
-  const toMatch = toHeader.match(/<?([\w._-]+@[\w.-]+)>?/)
-  if (toMatch && ACCOUNT_VAN_EMAIL[toMatch[1].toLowerCase()]) {
-    return ACCOUNT_VAN_EMAIL[toMatch[1].toLowerCase()]
-  }
-
-  // 3. From-header bij forwards (de doorsturende account)
-  const fromMatch = fromHeader.match(/<?([\w._-]+@[\w.-]+)>?/)
-  if (fromMatch && ACCOUNT_VAN_EMAIL[fromMatch[1].toLowerCase()]) {
-    return ACCOUNT_VAN_EMAIL[fromMatch[1].toLowerCase()]
-  }
-
-  // 4. Probeer "Hey {username}," / "Beste {username}," / "voltooid {username},"
+  // 2. Begroeting "Hey {username}," / "Beste {username}," / "voltooid {username},"
+  // Dit is Vinted's eigen tekst en dus de betrouwbaarste bron: immuun voor
+  // forwarding (alle mails komen samen op de hub, dus To/From zijn vervuild).
   const greetingPatterns = [
     /Hey\s+([a-z0-9_-]+),/i,
     /Beste\s+([a-z0-9_-]+),/i,
@@ -134,6 +136,19 @@ function findAccount(body: string, fromHeader: string, toHeader: string): Accoun
       if (ACCOUNT_VAN_USERNAME[u]) return ACCOUNT_VAN_USERNAME[u]
     }
   }
+
+  // 3. To: header zelf (bij directe Vinted-mails, fallback als begroeting onbekend is)
+  const toMatch = toHeader.match(/<?([\w._-]+@[\w.-]+)>?/)
+  if (toMatch && ACCOUNT_VAN_EMAIL[toMatch[1].toLowerCase()]) {
+    return ACCOUNT_VAN_EMAIL[toMatch[1].toLowerCase()]
+  }
+
+  // 4. From-header bij forwards (de doorsturende account)
+  const fromMatch = fromHeader.match(/<?([\w._-]+@[\w.-]+)>?/)
+  if (fromMatch && ACCOUNT_VAN_EMAIL[fromMatch[1].toLowerCase()]) {
+    return ACCOUNT_VAN_EMAIL[fromMatch[1].toLowerCase()]
+  }
+
   return null
 }
 

@@ -169,6 +169,70 @@ test('verkoop single-item — Engels Vinted-listing formaat', () => {
   assert.equal(result.productMapped, 'Porsche Black')
 })
 
+test('verkoop pertumstar — account via begroeting (iCloud-forward, onbekend adres)', () => {
+  const result = parseEmail({
+    subject: 'Je hebt een artikel verkocht op Vinted',
+    plaintextBody: `Hey pertumstar, koper99 heeft gekocht Cap Aime Leon Dore Porsche Cotton Black € 45,00 We maken de betaling over naar je Vinted Portemonnee.`,
+    fromHeader: 'Team Vinted <no-reply@vinted.be>',
+    toHeader: 'disteltr@gmail.com',
+  })
+
+  assert.equal(result.type, 'verkoop')
+  if (result.type !== 'verkoop') return
+  assert.equal(result.account, 'pertumstar')
+  assert.equal(result.koper, 'koper99')
+  assert.equal(result.isBundel, false)
+  assert.equal(result.prijs, 45)
+  assert.equal(result.productMapped, 'Porsche Black')
+})
+
+test('verkoop trisgeuss — account via begroeting (Apple-mail-forward)', () => {
+  const result = parseEmail({
+    subject: 'Je hebt een artikel verkocht op Vinted',
+    plaintextBody: `Hey trisgeuss, buyer_nl heeft gekocht Aimé Leon dore Yankees pet navy katoen € 40,00 We maken de betaling over naar je Vinted Portemonnee.`,
+    fromHeader: 'Team Vinted <no-reply@vinted.be>',
+    toHeader: 'disteltr@gmail.com',
+  })
+
+  assert.equal(result.type, 'verkoop')
+  if (result.type !== 'verkoop') return
+  assert.equal(result.account, 'trisgeuss')
+  assert.equal(result.koper, 'buyer_nl')
+  assert.equal(result.prijs, 40)
+  assert.equal(result.productMapped, 'NY Navy')
+})
+
+test('verkoop pertumstar — echte headers (esdoornm@gmail.com forwardt naar hub)', () => {
+  const result = parseEmail({
+    subject: 'Je hebt een artikel verkocht op Vinted',
+    plaintextBody: `Hey pertumstar, klantx heeft gekocht Porsche pet Aimé Leon dore groen € 50,00 We maken de betaling over.`,
+    fromHeader: 'Team Vinted <no-reply@vinted.be>',
+    toHeader: 'esdoornm@gmail.com',
+  })
+
+  assert.equal(result.type, 'verkoop')
+  if (result.type !== 'verkoop') return
+  assert.equal(result.account, 'pertumstar')
+  assert.equal(result.prijs, 50)
+})
+
+test('verkoop trisgeuss — Apple-relay: afzender herschreven, account via To-alias', () => {
+  // Sign-in-with-Apple relay herschrijft de afzender; greeting hier bewust onbruikbaar
+  // om de ACCOUNT_VAN_EMAIL-fallback (To-header) te testen.
+  const result = parseEmail({
+    subject: 'Je hebt een artikel verkocht op Vinted',
+    plaintextBody: `koper_be heeft gekocht Aimé Leon dore Yankees pet navy € 38,00 We maken de betaling over.`,
+    fromHeader: 'Team Vinted <no-reply_at_vinted_be_ttpz954dst_77a807e9@privaterelay.appleid.com>',
+    toHeader: 'ttpz954dst@privaterelay.appleid.com',
+  })
+
+  assert.equal(result.type, 'verkoop')
+  if (result.type !== 'verkoop') return
+  assert.equal(result.account, 'trisgeuss')
+  assert.equal(result.koper, 'koper_be')
+  assert.equal(result.prijs, 38)
+})
+
 test('onbekend mailtype', () => {
   const result = parseEmail({
     subject: 'Newsletter van Vinted',
