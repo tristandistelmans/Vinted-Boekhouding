@@ -35,9 +35,10 @@ export const ACCOUNTS = ['2-disteltr', 'trisverve', '1-jesuslata', '3-jasmijn'] 
 // Verwijderde accounts (trisverve, 3-jasmijn) blijven bestaan in de data,
 // maar zijn hier niet meer kiesbaar.
 export const CEO_ACCOUNTS = [
+  { value: 'trisgeuss', label: 'trisgeuss - iphone 13' },
+  { value: 'pertumstar', label: 'pertumstar - GSM Jasmijn' },
   { value: '2-disteltr', label: 'disteltr' },
   { value: '1-jesuslata', label: 'jesuslata' },
-  { value: 'trisgeuss', label: 'trisgeuss - iphone 13' },
 ] as const
 
 export const ACTIEVE_STATUSSEN = [
