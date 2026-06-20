@@ -88,6 +88,7 @@ type Stats = {
     topMaandAantal: number
   }[]
   winstPerAccount: { account: string; winst: number; aantal: number }[]
+  geldInOmloopPerAccount: { account: string; bedrag: number; aantal: number }[]
   winstPerProduct: { product: string; winst: number; aantal: number; gemVerkoopprijs: number }[]
   jasmijnStats?: JasmijnStats
   jasmijnOpenstaand?: number
@@ -582,6 +583,27 @@ function CEODashboard({ stats }: { stats: Stats }) {
                 </div>
               ))}
             </div>
+          </div>
+        </>
+      )}
+
+      {/* GELD IN OMLOOP PER ACCOUNT (Vinted "in behandeling") */}
+      {stats.geldInOmloopPerAccount && stats.geldInOmloopPerAccount.length > 0 && (
+        <>
+          <p className="text-xs font-semibold text-gray-500 uppercase tracking-widest mb-2">In behandeling per account</p>
+          <div className="bg-gray-800 rounded-xl p-3 mb-4">
+            <div className="space-y-1">
+              {stats.geldInOmloopPerAccount.map((a) => (
+                <div key={a.account} className="flex items-center justify-between gap-3 py-1.5 text-sm">
+                  <span className="text-gray-200 font-medium">{a.account}</span>
+                  <div className="flex gap-3 items-baseline shrink-0">
+                    <span className="text-gray-500 text-xs tabular-nums">{a.aantal}×</span>
+                    <span className="font-semibold tabular-nums text-amber-400">{formatEuro(a.bedrag)}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <p className="text-[11px] text-gray-500 mt-2">Nog te verzenden + onderweg + retour</p>
           </div>
         </>
       )}

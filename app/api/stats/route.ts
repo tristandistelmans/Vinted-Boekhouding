@@ -244,6 +244,19 @@ export async function GET(request: NextRequest) {
     return { account, winst: sommeerWinst(v), aantal: v.length }
   })
 
+  // Geld in omloop per account = som verkoopprijs van openstaande verkopen
+  // (nog te verzenden + onderweg + retour). Matcht Vinted "in behandeling".
+  // Over alle tijd (niet jaar-gefilterd), want het gaat om de huidige stand.
+  const inBehandelingStatussen = ['Verkocht - Nog niet verzonden', 'Onderweg', 'Retour']
+  const geldInOmloopPerAccount = accounts
+    .map((account) => {
+      const v = verkopenMetWinst.filter(
+        (vk) => vk.account === account && inBehandelingStatussen.includes(vk.status)
+      )
+      return { account, bedrag: v.reduce((s, vk) => s + vk.verkoopprijs, 0), aantal: v.length }
+    })
+    .filter((a) => a.bedrag > 0)
+
   const actieveStatussen = ['Afgerond (geld binnen)', 'Verkocht - Nog niet verzonden', 'Onderweg']
   const actieveVerkopen = verkopenDitJaar.filter((v) => actieveStatussen.includes(v.status))
 
@@ -487,6 +500,7 @@ export async function GET(request: NextRequest) {
     prestatiePerPet,
     winstPerProduct,
     winstPerAccount,
+    geldInOmloopPerAccount,
     jasmijnStats,
     jasmijnOpenstaand,
     commissieRegels,

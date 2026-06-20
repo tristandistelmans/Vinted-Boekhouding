@@ -246,14 +246,26 @@ export default function VerkopBeheren() {
     return true
   })
 
-  // Groepeer per account, "Nog verzenden" altijd eerst
+  // Bundel-detectie: meerdere verkopen aan dezelfde koper op dezelfde dag binnen één
+  // account = één pakket. Geteld over ALLE verkopen (ook weggefilterde) zodat het
+  // aantal klopt, ook als een filter een bundellid verbergt.
+  const bundelKey = (v: Verkoop) => `${v.account}__${v.naam_koper}__${v.verkoopdatum}`
+  const bundelCount: Record<string, number> = {}
+  for (const v of verkopen) bundelCount[bundelKey(v)] = (bundelCount[bundelKey(v)] || 0) + 1
+  const bundelTotaal: Record<string, number> = {}
+  for (const v of verkopen) bundelTotaal[bundelKey(v)] = (bundelTotaal[bundelKey(v)] || 0) + v.verkoopprijs
+
+  // Groepeer per account, "Nog verzenden" eerst, bundelleden bij elkaar.
   const accounts = [...new Set(gefilterd.map(v => v.account))].sort()
   function rijen(account: string) {
     const groep = gefilterd.filter(v => v.account === account)
-    return [
-      ...groep.filter(v => v.status === 'Verkocht - Nog niet verzonden'),
-      ...groep.filter(v => v.status !== 'Verkocht - Nog niet verzonden'),
-    ]
+    const prio = (v: Verkoop) => (v.status === 'Verkocht - Nog niet verzonden' ? 0 : 1)
+    return [...groep].sort((a, b) => {
+      if (prio(a) !== prio(b)) return prio(a) - prio(b)
+      const ka = bundelKey(a), kb = bundelKey(b)
+      if (ka !== kb) return ka < kb ? -1 : 1
+      return a.id < b.id ? -1 : 1
+    })
   }
 
   return (
@@ -371,8 +383,23 @@ export default function VerkopBeheren() {
               })()}
             </div>
 
-            {rijen(account).map((v) => (
-              <div key={v.id} className="border-b border-gray-800 px-3 py-2.5">
+            {(() => {
+              const lijst = rijen(account)
+              return lijst.map((v, i) => {
+                const bk = bundelKey(v)
+                const isBundel = bundelCount[bk] >= 2
+                const prevRij = lijst[i - 1]
+                const eersteVanBundel = isBundel && (!prevRij || bundelKey(prevRij) !== bk)
+                return (
+              <div key={v.id}>
+                {eersteVanBundel && (
+                  <div className="px-3 pt-2 pb-0.5">
+                    <span className="text-[11px] font-semibold text-amber-400 bg-amber-500/10 border border-amber-500/30 rounded-full px-2 py-0.5 inline-flex items-center gap-1">
+                      📦 Bundel · {bundelCount[bk]} items · {formatEuro(bundelTotaal[bk])} · 1 pakket
+                    </span>
+                  </div>
+                )}
+              <div className={`border-b border-gray-800 px-3 py-2.5 ${isBundel ? 'border-l-2 border-l-amber-500/70 bg-amber-500/[0.04]' : ''}`}>
                 {/* Bovenste rij: foto + info */}
                 <div className="flex items-start gap-2 mb-2">
                   <ProductAfbeelding product={v.product} />
@@ -498,7 +525,10 @@ export default function VerkopBeheren() {
                   )}
                 </div>
               </div>
-            ))}
+              </div>
+                )
+              })
+            })()}
           </div>
           ))}
         </div>

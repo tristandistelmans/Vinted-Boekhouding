@@ -106,11 +106,20 @@ export default function VerzendenPage() {
     }
   }
 
-  // Sort by urgency (most urgent first)
+  // Bundel-detectie: zelfde koper + datum + account = één pakket.
+  const bundelKey = (v: { account: string; naam_koper: string; verkoopdatum: string }) =>
+    `${v.account}__${v.naam_koper}__${v.verkoopdatum}`
+  const bundelCount: Record<string, number> = {}
+  verkopen.forEach((v) => { bundelCount[bundelKey(v)] = (bundelCount[bundelKey(v)] || 0) + 1 })
+
+  // Sort by urgency (most urgent first); bundelleden bij elkaar.
   const gesorteerd = [...verkopen].sort((a, b) => {
     const da = berekenDeadline(a.verkoopdatum)
     const db = berekenDeadline(b.verkoopdatum)
-    return da.dagenOver - db.dagenOver
+    if (da.dagenOver !== db.dagenOver) return da.dagenOver - db.dagenOver
+    const ka = bundelKey(a), kb = bundelKey(b)
+    if (ka !== kb) return ka < kb ? -1 : 1
+    return a.id < b.id ? -1 : 1
   })
 
   // Group by product for summary
@@ -163,14 +172,25 @@ export default function VerzendenPage() {
 
           {/* Sales list */}
           <div className="space-y-3">
-            {gesorteerd.map((v) => {
+            {gesorteerd.map((v, i) => {
               const dl = berekenDeadline(v.verkoopdatum)
               const label = deadlineLabel(dl.dagenOver, dl.isVerlopen)
+              const bk = bundelKey(v)
+              const isBundel = bundelCount[bk] >= 2
+              const prevV = gesorteerd[i - 1]
+              const eersteVanBundel = isBundel && (!prevV || bundelKey(prevV) !== bk)
 
               return (
+                <div key={v.id}>
+                {eersteVanBundel && (
+                  <div className="mb-1.5">
+                    <span className="text-[11px] font-semibold text-amber-400 bg-amber-500/10 border border-amber-500/30 rounded-full px-2 py-0.5 inline-flex items-center gap-1">
+                      📦 Bundel · {bundelCount[bk]} items · samen in 1 pakket
+                    </span>
+                  </div>
+                )}
                 <div
-                  key={v.id}
-                  className="bg-gray-800 border border-gray-700 rounded-xl p-3"
+                  className={`bg-gray-800 border rounded-xl p-3 ${isBundel ? 'border-amber-500/50' : 'border-gray-700'}`}
                 >
                   <div className="flex items-center gap-3">
                     <ProductAfbeelding product={v.product} />
@@ -197,6 +217,7 @@ export default function VerzendenPage() {
                       </div>
                     </div>
                   </div>
+                </div>
                 </div>
               )
             })}
